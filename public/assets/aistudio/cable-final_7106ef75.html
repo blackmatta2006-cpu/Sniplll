@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="kn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cable Routes</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;}
+.hidden{display:none!important;}
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);}
+.card{background:#fff;padding:30px;border-radius:16px;width:90%;max-width:380px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2);}
+input,button{width:100%;padding:12px;margin:8px 0;border-radius:10px;border:1px solid #ddd;font-size:16px;}
+button{background:#0066ff;color:#fff;border:none;font-weight:bold;cursor:pointer;}
+header{background:#1a237e;color:#fff;padding:12px;display:flex;justify-content:space-between;align-items:center;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #ddd;}
+.tabs button{flex:1;padding:12px;background:none;border:none;border-bottom:3px solid transparent;font-weight:600;}
+.tabs button.active{border-bottom-color:#0066ff;color:#0066ff;}
+.section{padding:12px;}
+#map{height:55vh;border-radius:12px;}
+#routesList{list-style:none;padding:0;}
+#routesList li{background:#fff;margin:8px 0;padding:14px;border-radius:10px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+#routesList li.active{border-left:4px solid #0066ff;background:#e3f2fd;}
+#chat{height:40vh;overflow-y:auto;background:#fff;border-radius:10px;padding:10px;margin-bottom:8px;}
+.msg{margin:6px 0;padding:10px;border-radius:12px;max-width:80%;}
+.msg.user{background:#0066ff;color:#fff;margin-left:auto;}
+.msg.bot{background:#f1f1f1;}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h2>Cable Routes</h2>
+    <input type="tel" id="phone" value="6361788965" maxlength="10">
+    <button onclick="login()">Login</button>
+    <p id="msg" style="color:red;"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <b>Cable Routes</b>
+    <span id="user"></span>
+    <button onclick="location.reload()" style="width:auto;padding:6px 12px;background:#ff1744;">Logout</button>
+  </header>
+  <div class="tabs">
+    <button class="active" onclick="tab('routes',this)">Routes</button>
+    <button onclick="tab('map',this)">Map</button>
+    <button onclick="tab('chat',this)">Cut Report</button>
+    <button id="admintab" class="hidden" onclick="tab('admin',this)">Admin</button>
+  </div>
+
+  <div id="sec-routes" class="section">
+    <input id="search" placeholder="Search route..." oninput="filter()" style="margin-bottom:8px;">
+    <ul id="routesList"></ul>
+  </div>
+  <div id="sec-map" class="section hidden"><div id="map"></div><div id="info" class="hidden" style="background:#fff3e0;padding:10px;margin-top:8px;border-radius:8px;"></div></div>
+  <div id="sec-chat" class="section hidden">
+    <div id="chat"></div>
+    <div style="display:flex;gap:6px;">
+      <input id="chatIn" placeholder="estakke cut agide cable" style="flex:1;">
+      <button onclick="send()" style="width:auto;">Send</button>
+    </div>
+  </div>
+  <div id="sec-admin" class="section hidden">
+    <input id="rname" placeholder="Route name">
+    <button onclick="startDraw()">Start Drawing</button>
+    <button id="saveb" onclick="saveRoute()" disabled>Save</button>
+    <p id="dstatus"></p>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const cfg={apiKey:"AIzaSyCdV5Bnn6lZowj68NRfIulSxpo2c_-1qd4",authDomain:"snipl-60579.firebaseapp.com",projectId:"snipl-60579",storageBucket:"snipl-60579.firebasestorage.app",messagingSenderId:"930923364237",appId:"1:930923364237:web:505f778d99fea4a16407c4"};
+firebase.initializeApp(cfg); const db=firebase.firestore();
+let map,poly,drawPath=[],drawLine,drawing=false,sel=null,admin=false,phone="";
+const ADMIN="6361788965";
+
+function login(){
+  phone=document.getElementById("phone").value.trim();
+  if(!/^\d{10}$/.test(phone)){document.getElementById("msg").innerText="10 digit enter madi";return;}
+  admin=phone===ADMIN;
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("user").innerText=admin?"Admin":"User";
+  if(admin)document.getElementById("admintab").classList.remove("hidden");
+  setTimeout(()=>{if(!map&&window.L)initMap();},400);
+  loadRoutes();
+  add("bot","Namaskara! Route select madi.");
+}
+function tab(name,btn){
+  document.querySelectorAll(".section").forEach(s=>s.classList.add("hidden"));
+  document.getElementById("sec-"+name).classList.remove("hidden");
+  document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  if(name==="map"&&map)setTimeout(()=>map.invalidateSize(),100);
+}
+function initMap(){
+  map=L.map("map").setView([12.97,77.59],13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
+  map.on("click",e=>{if(drawing)addPt(e.latlng);});
+}
+async function loadRoutes(){
+  const ul=document.getElementById("routesList");
+  ul.innerHTML="<li>Loading...</li>";
+  try{
+    const s=await db.collection("routes").orderBy("createdAt","desc").get();
+    ul.innerHTML="";
+    if(s.empty){ul.innerHTML="<li>No routes</li>";return;}
+    s.forEach(d=>{
+      const data=d.data();
+      const li=document.createElement("li");
+      li.innerHTML=`<b>${data.name}</b> <span style="float:right">${data.lengthMeters||0}m</span>`;
+      li.dataset.n=(data.name||"").toLowerCase();
+      li.onclick=()=>select(d.id,data,li);
+      ul.appendChild(li);
+    });
+  }catch(e){ul.innerHTML="<li>Error</li>";}
+}
+function filter(){
+  const q=document.getElementById("search").value.toLowerCase();
+  document.querySelectorAll("#routesList li").forEach(li=>li.style.display=(li.dataset.n||"").includes(q)?"":"none");
+}
+function select(id,data,el){
+  sel={id,...data};
+  document.querySelectorAll("#routesList li").forEach(l=>l.classList.remove("active"));
+  el.classList.add("active");
+  tab("map",document.querySelector(".tabs button:nth-child(2)"));
+  if(poly)map.removeLayer(poly);
+  if(data.coordinates&&data.coordinates.length>1){
+    poly=L.polyline(data.coordinates.map(c=>[c.lat,c.lng]),{color:"red",weight:5}).addTo(map);
+    map.fitBounds(poly.getBounds());
+  }
+  document.getElementById("info").classList.remove("hidden");
+  document.getElementById("info").innerHTML=`<b>${data.name}</b> — ${data.lengthMeters||0} meters`;
+  add("bot",`Route <b>${data.name}</b> select aagide. Cut Report tab ge hogi.`);
+}
+function startDraw(){
+  if(!document.getElementById("rname").value.trim()){alert("Name enter madi");return;}
+  drawing=true;drawPath=[];
+  document.getElementById("dstatus").innerText="Map alli click madi";
+  document.getElementById("saveb").disabled=false;
+  tab("map",document.querySelector(".tabs button:nth-child(2)"));
+}
+function addPt(ll){
+  drawPath.push({lat:ll.lat,lng:ll.lng});
+  if(drawLine)map.removeLayer(drawLine);
+  drawLine=L.polyline(drawPath.map(p=>[p.lat,p.lng]),{color:"green",weight:4}).addTo(map);
+  document.getElementById("dstatus").innerText=drawPath.length+" points";
+}
+async function saveRoute(){
+  const name=document.getElementById("rname").value.trim();
+  if(drawPath.length<2){alert("2+ points");return;}
+  let len=0;for(let i=0;i<drawPath.length-1;i++)len+=hav(drawPath[i],drawPath[i+1]);
+  await db.collection("routes").add({name,coordinates:drawPath,lengthMeters:Math.round(len),createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:phone});
+  alert("Saved");drawing=false;drawPath=[];if(drawLine)map.removeLayer(drawLine);
+  document.getElementById("rname").value="";document.getElementById("dstatus").innerText="";document.getElementById("saveb").disabled=true;
+  loadRoutes();tab("routes",document.querySelector(".tabs button:nth-child(1)"));
+}
+function hav(a,b){const R=6371000,t=d=>d*Math.PI/180;const dLat=t(b.lat-a.lat),dLon=t(b.lng-a.lng);const x=Math.sin(dLat/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function add(role,text){const d=document.createElement("div");d.className="msg "+role;d.innerHTML=text;document.getElementById("chat").appendChild(d);document.getElementById("chat").scrollTop=9999;}
+function send(){
+  const inp=document.getElementById("chatIn");
+  const msg=inp.value.trim();if(!msg)return;
+  add("user",msg);inp.value="";
+  if(/cut|estakke|cable/i.test(msg)){
+    if(!sel){add("bot","<b>First Routes tab alli route click madi.</b>");return;}
+    if(!sel.coordinates||!sel.coordinates.length){add("bot","Route data illa.");return;}
+    const mid=sel.coordinates[Math.floor(sel.coordinates.length/2)];
+    const lat=mid.lat.toFixed(6),lng=mid.lng.toFixed(6);
+    const maps=`https://www.google.com/maps?q=${lat},${lng}`;
+    const sv=`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+    add("bot",`<b style="color:green;">Cut Link Ready!</b><br><a href="${maps}" target="_blank" style="color:#0066ff;font-weight:bold;">📍 Google Maps</a><br><a href="${sv}" target="_blank" style="color:green;font-weight:bold;">🛣️ Street View</a>`);
+    db.collection("cutReports").add({routeId:sel.id,routeName:sel.name,lat:+lat,lng:+lng,reportedBy:phone,timestamp:firebase.firestore.FieldValue.serverTimestamp(),mapsLink:maps,streetViewLink:sv}).catch(()=>{});
+  }else add("bot","Route select madi, then 'estakke cut agide cable' type madi.");
+}
+</script>
+</body>
+</html>

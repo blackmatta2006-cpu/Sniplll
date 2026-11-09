@@ -1,0 +1,6 @@
+{
+  "name": "Cable Routes",
+  "description": "Fiber optic cable route surveying, mapping, inspection, and cut reporting tool with full-page map and Firestore sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
