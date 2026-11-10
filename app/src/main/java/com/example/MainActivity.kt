@@ -108,6 +108,8 @@ fun ShreyNetworkApp(
     val isSnapToRoad by viewModel.isSnapToRoadEnabled.collectAsStateWithLifecycle()
     val isAutoDrive by viewModel.isAutoDriveActive.collectAsStateWithLifecycle()
     val driveSpeedKmh by viewModel.driveSpeedKmh.collectAsStateWithLifecycle()
+    val currentGpsLocation by viewModel.currentGpsLocation.collectAsStateWithLifecycle()
+    val mapRotationDegrees by viewModel.mapRotationDegrees.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
@@ -115,15 +117,15 @@ fun ShreyNetworkApp(
     val snackbarHostState = remember { SnackbarHostState() }
     var showDrawNameDialog by remember { mutableStateOf(false) }
 
-    // Request Location permission for driving auto-survey
+    // Request Location permission for surveying and driving auto-survey
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        // Handle result
-    }
+    ) { _ -> }
 
-    LaunchedEffect(isAutoDrive) {
-        if (isAutoDrive) {
+    val shouldTrackLocation = userSession != null
+
+    LaunchedEffect(shouldTrackLocation) {
+        if (shouldTrackLocation) {
             val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (!hasFine) {
                 permissionLauncher.launch(
@@ -136,14 +138,14 @@ fun ShreyNetworkApp(
         }
     }
 
-    // GPS location listener for driving auto-survey
-    DisposableEffect(isAutoDrive) {
-        if (!isAutoDrive) return@DisposableEffect onDispose {}
+    // GPS location listener for surveying & current location beacon
+    DisposableEffect(shouldTrackLocation) {
+        if (!shouldTrackLocation) return@DisposableEffect onDispose {}
 
         val fusedClient = LocationServices.getFusedLocationProviderClient(context)
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
             .setMinUpdateIntervalMillis(1000)
-            .setMinUpdateDistanceMeters(10f)
+            .setMinUpdateDistanceMeters(5f)
             .build()
 
         val locationCallback = object : LocationCallback() {
@@ -375,11 +377,17 @@ fun ShreyNetworkApp(
                                 isSnapToRoad = isSnapToRoad,
                                 isAutoDrive = isAutoDrive,
                                 driveSpeedKmh = driveSpeedKmh,
+                                currentGpsLocation = currentGpsLocation,
+                                mapRotationDegrees = mapRotationDegrees,
                                 onAddDrawPoint = { pt -> viewModel.addPointToDraw(pt) },
                                 onMoveDirection = { dir -> viewModel.moveInDirection(dir) },
-                                onAddLoopJointBox = { loopMeters -> viewModel.addLoopJointBox(loopMeters) },
+                                onAddLoopJointBox = { loopMeters, photoUrl, name ->
+                                    viewModel.addLoopJointBox(loopMeters, photoUrl, name)
+                                },
                                 onToggleSnapToRoad = { viewModel.toggleSnapToRoad() },
                                 onToggleAutoDrive = { viewModel.toggleAutoDrive() },
+                                onRotateMap = { delta -> viewModel.rotateMap(delta) },
+                                onResetMapRotation = { viewModel.resetMapRotation() },
                                 onUndoDrawPoint = { viewModel.undoLastDrawPoint() },
                                 onSaveDrawnRoute = { viewModel.saveDrawnRoute() },
                                 onCancelDrawing = { viewModel.cancelDrawing() },
@@ -407,6 +415,9 @@ fun ShreyNetworkApp(
                                     val r = filteredRoutes.find { it.id == report.routeId }
                                     if (r != null) viewModel.selectRoute(r)
                                     viewModel.setTab(AppTab.FULL_MAP)
+                                },
+                                onDeleteCutReport = { report ->
+                                    viewModel.deleteCutReport(report)
                                 }
                             )
                         }

@@ -106,6 +106,12 @@ class CableRepository(
         return res.isSuccess
     }
 
+    suspend fun deleteCutReport(reportId: String): Boolean {
+        _cutReports.value = _cutReports.value.filter { it.id != reportId }
+        val res = remoteDataSource.deleteCutReport(reportId)
+        return res.isSuccess
+    }
+
     suspend fun addAdmin(phone: String): Boolean {
         val clean = phone.trim()
         if (clean.length != 10 || !clean.all { it.isDigit() }) return false

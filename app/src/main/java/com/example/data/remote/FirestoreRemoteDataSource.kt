@@ -90,7 +90,8 @@ class FirestoreRemoteDataSource(
                             val jLat = jMap.optJSONObject("lat")?.optDouble("doubleValue") ?: 0.0
                             val jLng = jMap.optJSONObject("lng")?.optDouble("doubleValue") ?: 0.0
                             val jLoop = jMap.optJSONObject("loopMeters")?.optInt("integerValue", 20) ?: 20
-                            jointBoxesList.add(LoopJointBox(jId, jLat, jLng, jLoop, jName))
+                            val jPhoto = jMap.optJSONObject("photoUrl")?.optString("stringValue", "") ?: ""
+                            jointBoxesList.add(LoopJointBox(jId, jLat, jLng, jLoop, jName, jPhoto))
                         }
                     }
                 }
@@ -213,6 +214,9 @@ class FirestoreRemoteDataSource(
                         put("lat", JSONObject().put("doubleValue", jb.lat))
                         put("lng", JSONObject().put("doubleValue", jb.lng))
                         put("loopMeters", JSONObject().put("integerValue", jb.loopMeters.toString()))
+                        if (jb.photoUrl.isNotEmpty()) {
+                            put("photoUrl", JSONObject().put("stringValue", jb.photoUrl))
+                        }
                     })
                 }
                 jbArray.put(JSONObject().put("mapValue", jMap))
@@ -283,6 +287,22 @@ class FirestoreRemoteDataSource(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving cut report", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteCutReport(reportId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$BASE_URL/cutReports/$reportId?key=$API_KEY"
+            val request = Request.Builder().url(url).delete().build()
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception("Delete incident failed: HTTP ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting incident", e)
             Result.failure(e)
         }
     }

@@ -11,8 +11,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,26 +27,41 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ReportProblem
+import androidx.compose.material.icons.filled.RotateLeft
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Streetview
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,22 +73,28 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,14 +106,17 @@ import com.example.data.model.GeoPoint
 import com.example.data.model.LoopJointBox
 import com.example.data.model.UserSession
 import com.example.ui.theme.CutRed
-import com.example.ui.theme.ElectricBlue
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.JointBoxPurple
 import com.example.ui.theme.OrangeAmber
 import com.example.ui.theme.OrangeDark
-import com.example.ui.theme.OrangeFlame
 import com.example.ui.theme.OrangePrimary
 import com.example.util.HaversineUtil
+import com.example.util.PlaceSearchResult
+import com.example.util.PlaceSearchUtil
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -126,11 +148,15 @@ fun FullPageMapScreen(
     isSnapToRoad: Boolean,
     isAutoDrive: Boolean,
     driveSpeedKmh: Float,
+    currentGpsLocation: GeoPoint?,
+    mapRotationDegrees: Float,
     onAddDrawPoint: (GeoPoint) -> Unit,
     onMoveDirection: (DrawDirection) -> Unit,
-    onAddLoopJointBox: (Int) -> Unit,
+    onAddLoopJointBox: (loopMeters: Int, photoUrl: String, name: String) -> Unit,
     onToggleSnapToRoad: () -> Unit,
     onToggleAutoDrive: () -> Unit,
+    onRotateMap: (Float) -> Unit,
+    onResetMapRotation: () -> Unit,
     onUndoDrawPoint: () -> Unit,
     onSaveDrawnRoute: () -> Unit,
     onCancelDrawing: () -> Unit,
@@ -138,16 +164,25 @@ fun FullPageMapScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var isMapLoaded by remember { mutableStateOf(false) }
     var selectedMarkerInfo by remember { mutableStateOf<String?>(null) }
     var showTileSwitcher by remember { mutableStateOf(false) }
-    var showJointBoxMenu by remember { mutableStateOf(false) }
+    var showAddJointBoxDialog by remember { mutableStateOf(false) }
     var activeTileType by remember { mutableStateOf("osm") } // "osm", "osmfr", "satellite"
+
+    // Place Search states
+    var placeQuery by remember { mutableStateOf("") }
+    var placeSearchResults by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
+    var isSearchingPlaces by remember { mutableStateOf(false) }
+    var searchDebounceJob by remember { mutableStateOf<Job?>(null) }
 
     val mapHtml = remember { getMapHtmlContent() }
 
-    // Update Route, Cut Pins, and Joint Boxes on Map
+    // Update Route, Cut Pins, Joint Boxes, and Drawing on Map
     LaunchedEffect(isMapLoaded, selectedRoute, cutReports, isDrawingMode, drawPath, drawJointBoxes, activeTileType) {
         val wv = webViewRef ?: return@LaunchedEffect
         if (!isMapLoaded) return@LaunchedEffect
@@ -168,6 +203,7 @@ fun FullPageMapScreen(
                         put("lng", jb.lng)
                         put("name", jb.name)
                         put("loop", jb.loopMeters)
+                        put("photoUrl", jb.photoUrl)
                     })
                 }
             }
@@ -192,6 +228,7 @@ fun FullPageMapScreen(
                             put("lng", jb.lng)
                             put("name", jb.name)
                             put("loop", jb.loopMeters)
+                            put("photoUrl", jb.photoUrl)
                         })
                     }
                 }
@@ -224,6 +261,26 @@ fun FullPageMapScreen(
             }
             wv.evaluateJavascript("renderCuts($cutsJson);", null)
         }
+    }
+
+    // Update Current Location Marker on Map
+    LaunchedEffect(isMapLoaded, currentGpsLocation) {
+        val wv = webViewRef ?: return@LaunchedEffect
+        if (!isMapLoaded) return@LaunchedEffect
+
+        if (currentGpsLocation != null) {
+            wv.evaluateJavascript(
+                "updateCurrentLocation(${currentGpsLocation.lat}, ${currentGpsLocation.lng});",
+                null
+            )
+        }
+    }
+
+    // Update Map Rotation in WebView
+    LaunchedEffect(isMapLoaded, mapRotationDegrees) {
+        val wv = webViewRef ?: return@LaunchedEffect
+        if (!isMapLoaded) return@LaunchedEffect
+        wv.evaluateJavascript("setMapRotation($mapRotationDegrees);", null)
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -276,6 +333,130 @@ fun FullPageMapScreen(
                 .fillMaxSize()
                 .testTag("full_page_map_webview")
         )
+
+        // TOP AREA: PLACE SEARCH BAR (When not in drawing mode, or minimized)
+        if (!isDrawingMode) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                // Floating Place Search Card
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search Places",
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = placeQuery,
+                            onValueChange = { newText ->
+                                placeQuery = newText
+                                searchDebounceJob?.cancel()
+                                if (newText.length >= 2) {
+                                    searchDebounceJob = coroutineScope.launch {
+                                        delay(400)
+                                        isSearchingPlaces = true
+                                        val res = PlaceSearchUtil.searchPlace(newText)
+                                        placeSearchResults = res
+                                        isSearchingPlaces = false
+                                    }
+                                } else {
+                                    placeSearchResults = emptyList()
+                                }
+                            },
+                            placeholder = { Text("Search places / roads / areas...", fontSize = 13.sp) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                cursorColor = OrangePrimary
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("map_place_search_input"),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = {
+                                focusManager.clearFocus()
+                            })
+                        )
+
+                        if (placeQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    placeQuery = ""
+                                    placeSearchResults = emptyList()
+                                    focusManager.clearFocus()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+
+                // Place Search Suggestions Dropdown
+                if (placeSearchResults.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        LazyColumn(modifier = Modifier.padding(vertical = 4.dp)) {
+                            items(placeSearchResults) { result ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            focusManager.clearFocus()
+                                            placeQuery = result.shortName
+                                            placeSearchResults = emptyList()
+                                            // Fly map to searched place & drop search marker
+                                            val shortEscaped = JSONObject.quote(result.shortName)
+                                            webViewRef?.evaluateJavascript(
+                                                "flyToPlace(${result.lat}, ${result.lng}, $shortEscaped);",
+                                                null
+                                            )
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Place, contentDescription = null, tint = OrangePrimary, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = result.shortName, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF2C2420))
+                                        Text(
+                                            text = result.displayName,
+                                            fontSize = 11.sp,
+                                            color = Color.Gray,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // DRAWING MODE HUD: Big Direction Controls & Survey Options
         if (isDrawingMode) {
@@ -347,7 +528,7 @@ fun FullPageMapScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Features Row: Road Snapping, Joint Box (+ Loop), Auto-Drive
+                        // Features Row: Road Snapping, Joint Box (+ Loop & Photo), Auto-Drive
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -383,14 +564,15 @@ fun FullPageMapScreen(
                                 }
                             }
 
-                            // Loop Joint Box Trigger
+                            // Loop Joint Box Trigger with Photo URL Option
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = JointBoxPurple.copy(alpha = 0.25f),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
-                                    .clickable { showJointBoxMenu = !showJointBoxMenu }
+                                    .clickable { showAddJointBoxDialog = true }
                                     .border(1.dp, JointBoxPurple, RoundedCornerShape(10.dp))
+                                    .testTag("add_joint_box_button")
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -404,7 +586,7 @@ fun FullPageMapScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "+ Loop Joint Box",
+                                        text = "+ Loop Joint Box (Photo)",
                                         color = Color(0xFFD1C4E9),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
@@ -444,40 +626,9 @@ fun FullPageMapScreen(
                     }
                 }
 
-                // Joint Box Loop Selector Dropdown Popup
-                if (showJointBoxMenu) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF26201D),
-                        shadowElevation = 8.dp,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(15 to "15m Loop", 20 to "20m Loop", 30 to "30m Loop", 50 to "50m Loop").forEach { (meters, label) ->
-                                Button(
-                                    onClick = {
-                                        onAddLoopJointBox(meters)
-                                        showJointBoxMenu = false
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = OrangeDark),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(34.dp)
-                                ) {
-                                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // BIG DIRECTION CONTROLS ON MAP ("direction marks right left straight back dodda icons avu click madidre draw agbeku")
+                // BIG DIRECTION CONTROLS ON MAP ("direction marks right left straight back dodda icons")
                 ElevatedCard(
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = Color.White.copy(alpha = 0.94f)),
@@ -532,8 +683,8 @@ fun FullPageMapScreen(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(CircleShape)
-                                        .clickable { onMoveDirection(DrawDirection.LEFT) }
-                                        .testTag("direction_left")
+                                    .clickable { onMoveDirection(DrawDirection.LEFT) }
+                                    .testTag("direction_left")
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -587,37 +738,99 @@ fun FullPageMapScreen(
             }
         }
 
-        // Map Control Floating Buttons (Right Side)
+        // MAP ROTATION & CONTROLS FLOATING BAR (Right Side)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Recenter on Route
+            // COMPASS & NORTH RESET BUTTON ("map rotatable agbeku")
+            FloatingActionButton(
+                onClick = { onResetMapRotation() },
+                modifier = Modifier
+                    .size(44.dp)
+                    .testTag("compass_button"),
+                containerColor = Color.White,
+                contentColor = OrangePrimary,
+                elevation = FloatingActionButtonDefaults.elevation(4.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Explore,
+                        contentDescription = "Compass / Reset North",
+                        modifier = Modifier
+                            .size(26.dp)
+                            .rotate(-mapRotationDegrees), // Needle points to real North
+                        tint = if (mapRotationDegrees != 0f) OrangePrimary else Color(0xFF555555)
+                    )
+                }
+            }
+
+            // ROTATE LEFT BUTTON (-30°)
+            FloatingActionButton(
+                onClick = { onRotateMap(-30f) },
+                modifier = Modifier
+                    .size(38.dp)
+                    .testTag("rotate_left_button"),
+                containerColor = Color.White,
+                contentColor = OrangeDark,
+                elevation = FloatingActionButtonDefaults.elevation(3.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RotateLeft,
+                    contentDescription = "Rotate Left 30°",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // ROTATE RIGHT BUTTON (+30°)
+            FloatingActionButton(
+                onClick = { onRotateMap(30f) },
+                modifier = Modifier
+                    .size(38.dp)
+                    .testTag("rotate_right_button"),
+                containerColor = Color.White,
+                contentColor = OrangeDark,
+                elevation = FloatingActionButtonDefaults.elevation(3.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RotateRight,
+                    contentDescription = "Rotate Right 30°",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // RECENTER ON GPS CURRENT LOCATION / ROUTE
             FloatingActionButton(
                 onClick = {
-                    webViewRef?.evaluateJavascript("fitBoundsToCurrent();", null)
+                    if (currentGpsLocation != null) {
+                        webViewRef?.evaluateJavascript(
+                            "map.setView([${currentGpsLocation.lat}, ${currentGpsLocation.lng}], 16);",
+                            null
+                        )
+                    } else {
+                        webViewRef?.evaluateJavascript("fitBoundsToCurrent();", null)
+                    }
                 },
                 modifier = Modifier
                     .size(44.dp)
                     .testTag("fit_bounds_button"),
                 containerColor = Color.White,
-                contentColor = OrangePrimary,
+                contentColor = if (currentGpsLocation != null) Color(0xFF2979FF) else OrangePrimary,
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.MyLocation,
-                    contentDescription = "Fit to Route",
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = "My Location",
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            // Layer Switcher
+            // LAYER SWITCHER
             FloatingActionButton(
-                onClick = {
-                    showTileSwitcher = !showTileSwitcher
-                },
+                onClick = { showTileSwitcher = !showTileSwitcher },
                 modifier = Modifier
                     .size(44.dp)
                     .testTag("map_layers_button"),
@@ -677,6 +890,114 @@ fun FullPageMapScreen(
                     }
                 }
             }
+        }
+
+        // DIALOG: ADD LOOP JOINT BOX WITH PHOTO URL ("join box hakid takshana photo url hako option irbeku")
+        if (showAddJointBoxDialog) {
+            var selectedMeters by remember { mutableStateOf(20) }
+            var jcName by remember { mutableStateOf("") }
+            var photoUrlInput by remember { mutableStateOf("") }
+
+            AlertDialog(
+                onDismissRequest = { showAddJointBoxDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Inventory2, contentDescription = null, tint = JointBoxPurple)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Add Loop Joint Box / ಜಾಯಿಂಟ್ ಬಾಕ್ಸ್",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = OrangeDark
+                            )
+                        )
+                    }
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Cable Slack Reserve (ಮೀಟರ್ ಲೂಪ್):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2C2420)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Loop selection pills
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(15 to "15m", 20 to "20m", 30 to "30m", 50 to "50m").forEach { (meters, label) ->
+                                Button(
+                                    onClick = { selectedMeters = meters },
+                                    modifier = Modifier.weight(1f).height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (selectedMeters == meters) OrangePrimary else Color(0xFFFFECE0),
+                                        contentColor = if (selectedMeters == meters) Color.White else OrangeDark
+                                    ),
+                                    contentPadding = PaddingValues(0.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Joint Box Tag / ID
+                        OutlinedTextField(
+                            value = jcName,
+                            onValueChange = { jcName = it },
+                            label = { Text("Joint Box Name / ID") },
+                            placeholder = { Text("e.g. JC-Chamber #4") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // PHOTO URL FIELD (User asked: "join box hakid takshana photo url hako option irbeku")
+                        OutlinedTextField(
+                            value = photoUrlInput,
+                            onValueChange = { photoUrlInput = it },
+                            label = { Text("Joint Box Photo URL (ಫೋಟೋ ಲಿಂಕ್)") },
+                            placeholder = { Text("https://example.com/jc_photo.jpg") },
+                            leadingIcon = {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = OrangePrimary)
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        Text(
+                            text = "Enter direct photo link of splice tray or chamber.",
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onAddLoopJointBox(selectedMeters, photoUrlInput, jcName)
+                            showAddJointBoxDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)
+                    ) {
+                        Text("Add Joint Box", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showAddJointBoxDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+                shape = RoundedCornerShape(18.dp)
+            )
         }
 
         // Bottom Action Floating Card (Route Details or Drawing Save Bar)
@@ -887,7 +1208,29 @@ private fun getMapHtmlContent(): String {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #fff5ec; }
+        html, body { height: 100%; width: 100%; margin: 0; padding: 0; background: #fff5ec; overflow: hidden; }
+        
+        /* Map Viewport & Rotator container to allow full 360 deg rotatable map */
+        #map-viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        #map-rotator {
+            position: absolute;
+            top: -40%;
+            left: -40%;
+            width: 180%;
+            height: 180%;
+            transform-origin: 50% 50%;
+            transition: transform 0.25s ease-out;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
         .cut-marker {
             background-color: #ff1744;
             border: 2px solid #ffffff;
@@ -902,6 +1245,23 @@ private fun getMapHtmlContent(): String {
             50% { transform: scale(1.3); opacity: 1; }
             100% { transform: scale(0.9); opacity: 0.9; }
         }
+
+        /* Pulsing GPS Radar Beacon for Current Location */
+        .gps-current-marker {
+            background-color: #2979ff;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            box-shadow: 0 0 0 0 rgba(41, 121, 255, 0.8);
+            animation: gpsRadar 1.8s infinite;
+        }
+        @keyframes gpsRadar {
+            0% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0.8); }
+            70% { box-shadow: 0 0 0 18px rgba(41, 121, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0); }
+        }
+
         .start-pin {
             background: #00c853;
             color: #ffffff;
@@ -929,16 +1289,39 @@ private fun getMapHtmlContent(): String {
             color: #ffffff;
             font-weight: bold;
             font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 6px;
+            padding: 3px 6px;
+            border-radius: 8px;
             border: 2px solid #fff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 6px rgba(124, 77, 255, 0.5);
             white-space: nowrap;
+            cursor: pointer;
+        }
+        .search-pin {
+            background: #e65100;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            white-space: nowrap;
+        }
+        .jc-photo-thumb {
+            width: 100%;
+            max-height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-top: 6px;
         }
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <div id="map-viewport">
+        <div id="map-rotator">
+            <div id="map"></div>
+        </div>
+    </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         var map = L.map('map', { zoomControl: false }).setView([12.9716, 77.5946], 13);
@@ -984,6 +1367,8 @@ private fun getMapHtmlContent(): String {
         var jbMarkers = [];
         var drawPolyline = null;
         var drawMarkers = [];
+        var currentLocationMarker = null;
+        var searchMarker = null;
         var isDrawing = false;
         var lastBounds = null;
 
@@ -992,6 +1377,41 @@ private fun getMapHtmlContent(): String {
                 window.AndroidBridge.handleMapClick(e.latlng.lat, e.latlng.lng);
             }
         });
+
+        function setMapRotation(deg) {
+            var rotator = document.getElementById('map-rotator');
+            if (rotator) {
+                rotator.style.transform = 'rotate(' + deg + 'deg)';
+            }
+            map.invalidateSize();
+        }
+
+        function updateCurrentLocation(lat, lng) {
+            if (currentLocationMarker) {
+                currentLocationMarker.setLatLng([lat, lng]);
+            } else {
+                var icon = L.divIcon({
+                    className: 'gps-current-marker',
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
+                });
+                currentLocationMarker = L.marker([lat, lng], { icon: icon, zIndexOffset: 1000 }).addTo(map);
+                currentLocationMarker.bindPopup('<b>📍 Current Location</b><br>You are here');
+            }
+        }
+
+        function flyToPlace(lat, lng, name) {
+            map.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+            if (searchMarker) { map.removeLayer(searchMarker); }
+            var icon = L.divIcon({
+                className: '',
+                html: '<div class="search-pin">📍 ' + name + '</div>',
+                iconSize: [100, 24],
+                iconAnchor: [50, 12]
+            });
+            searchMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+            searchMarker.bindPopup('<b>' + name + '</b><br>Lat: ' + lat.toFixed(5) + ', Lng: ' + lng.toFixed(5)).openPopup();
+        }
 
         function clearRoute() {
             if (polylineLayer) { map.removeLayer(polylineLayer); polylineLayer = null; }
@@ -1033,17 +1453,21 @@ private fun getMapHtmlContent(): String {
                 endMarker = L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map);
             }
 
-            // Render Joint Boxes
+            // Render Joint Boxes with photo option
             if (jointBoxes && jointBoxes.length > 0) {
                 jointBoxes.forEach(function(jb) {
                     var jbIcon = L.divIcon({
                         className: '',
                         html: '<div class="jointbox-pin">📦 ' + (jb.loop || 20) + 'm JC</div>',
-                        iconSize: [52, 20],
-                        iconAnchor: [26, 10]
+                        iconSize: [56, 20],
+                        iconAnchor: [28, 10]
                     });
                     var m = L.marker([jb.lat, jb.lng], { icon: jbIcon }).addTo(map);
-                    m.bindPopup('<b>' + (jb.name || 'Joint Box') + '</b><br>Loop Slack: ' + (jb.loop || 20) + ' meters');
+                    var popupHtml = '<b>' + (jb.name || 'Joint Box') + '</b><br>Loop Slack: ' + (jb.loop || 20) + ' meters';
+                    if (jb.photoUrl && jb.photoUrl.length > 5) {
+                        popupHtml += '<br><img src="' + jb.photoUrl + '" class="jc-photo-thumb" onerror="this.style.display=\'none\'" /><br><a href="' + jb.photoUrl + '" target="_blank" style="color:#ff6d00;font-size:11px;font-weight:bold;">View Photo</a>';
+                    }
+                    m.bindPopup(popupHtml);
                     jbMarkers.push(m);
                 });
             }
@@ -1057,6 +1481,8 @@ private fun getMapHtmlContent(): String {
                 map.fitBounds(lastBounds, { padding: [40, 40] });
             } else if (polylineLayer) {
                 map.fitBounds(polylineLayer.getBounds(), { padding: [40, 40] });
+            } else if (currentLocationMarker) {
+                map.setView(currentLocationMarker.getLatLng(), 15);
             } else {
                 map.setView([12.9716, 77.5946], 13);
             }
@@ -1119,16 +1545,21 @@ private fun getMapHtmlContent(): String {
                     drawMarkers.push(m);
                 }
 
-                // Render Joint Boxes in draw mode
+                // Render Joint Boxes in draw mode with photo link preview
                 if (jointBoxes && jointBoxes.length > 0) {
                     jointBoxes.forEach(function(jb) {
                         var jbIcon = L.divIcon({
                             className: '',
                             html: '<div class="jointbox-pin">📦 ' + (jb.loop || 20) + 'm JC</div>',
-                            iconSize: [52, 20],
-                            iconAnchor: [26, 10]
+                            iconSize: [56, 20],
+                            iconAnchor: [28, 10]
                         });
                         var jbm = L.marker([jb.lat, jb.lng], { icon: jbIcon }).addTo(map);
+                        var pContent = '<b>' + (jb.name || 'Joint Box') + '</b><br>Loop Slack: ' + (jb.loop || 20) + 'm';
+                        if (jb.photoUrl && jb.photoUrl.length > 5) {
+                            pContent += '<br><img src="' + jb.photoUrl + '" class="jc-photo-thumb" onerror="this.style.display=\'none\'" />';
+                        }
+                        jbm.bindPopup(pContent);
                         drawMarkers.push(jbm);
                     });
                 }

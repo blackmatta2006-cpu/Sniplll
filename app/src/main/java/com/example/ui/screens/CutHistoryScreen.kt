@@ -22,19 +22,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Streetview
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,9 +60,11 @@ import com.example.ui.theme.OrangePrimary
 fun CutHistoryScreen(
     cutReports: List<CutReport>,
     onViewOnMapClick: (CutReport) -> Unit,
+    onDeleteCutReport: (CutReport) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var incidentToDelete by remember { mutableStateOf<CutReport?>(null) }
 
     if (cutReports.isEmpty()) {
         Column(
@@ -284,10 +293,60 @@ fun CutHistoryScreen(
                                     )
                                 }
                             }
+
+                            // Delete Incident Option
+                            IconButton(
+                                onClick = { incidentToDelete = report },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(CutRed.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                                    .testTag("delete_incident_${report.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Incident",
+                                    tint = CutRed,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+
+        // Delete Incident Confirmation Dialog
+        if (incidentToDelete != null) {
+            val incident = incidentToDelete!!
+            AlertDialog(
+                onDismissRequest = { incidentToDelete = null },
+                title = {
+                    Text(
+                        text = "Delete Incident / ಇನ್ಸಿಡೆಂಟ್ ಡಿಲೀಟ್",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = CutRed)
+                    )
+                },
+                text = {
+                    Text("Delete cut report on '${incident.routeName}' (${incident.notes})? This will permanently remove it from the system.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onDeleteCutReport(incident)
+                            incidentToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CutRed)
+                    ) {
+                        Text("Delete", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { incidentToDelete = null }) {
+                        Text("Cancel")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
         }
     }
 }

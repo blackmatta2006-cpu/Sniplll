@@ -10,7 +10,8 @@ data class LoopJointBox(
     val lat: Double,
     val lng: Double,
     val loopMeters: Int = 20, // default 20m cable slack reserve in joint closure
-    val name: String = "Loop Joint Box"
+    val name: String = "Loop Joint Box",
+    val photoUrl: String = "" // Photo URL of the installed joint box/closure
 )
 
 data class CableRoute(

@@ -175,13 +175,21 @@ fun RoutesListScreen(
                 items(routes, key = { it.id }) { route ->
                     val isSelected = selectedRoute?.id == route.id
                     val cutsForThisRoute = cutReports.filter { it.routeId == route.id }
+                    var isExpanded by remember { mutableStateOf(isSelected) }
+
+                    val midPoint = if (route.coordinates.isNotEmpty()) {
+                        route.coordinates[route.coordinates.size / 2]
+                    } else null
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onRouteSelected(route, false) }
+                            .clickable {
+                                isExpanded = !isExpanded
+                                onRouteSelected(route, false)
+                            }
                             .testTag("route_card_${route.id}"),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (isSelected) Color(0xFFFFF3E0) else Color.White
                         ),
@@ -189,10 +197,10 @@ fun RoutesListScreen(
                             if (isSelected) 2.dp else 1.dp,
                             if (isSelected) OrangePrimary else Color(0xFFFFE0CC)
                         ),
-                        elevation = CardDefaults.cardElevation(if (isSelected) 5.dp else 1.5.dp)
+                        elevation = CardDefaults.cardElevation(if (isSelected) 4.dp else 1.5.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            // Top Row: Name and Length Tag
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Primary Line: BARI HESARU MATRA (Only the Name) + Expand Indicator
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -212,193 +220,200 @@ fun RoutesListScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Timeline,
+                                            imageVector = Icons.Default.Route,
                                             contentDescription = null,
                                             tint = if (isSelected) Color.White else OrangeDark,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = route.name,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF2C2420)
-                                            )
-                                        )
-                                        Text(
-                                            text = "Created by: ${route.createdBy}",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF757575))
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = route.name,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF2C2420)
+                                        ),
+                                        maxLines = 1
+                                    )
                                 }
 
-                                // Total length pill (including joint box slack)
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = OrangePrimary
+                                    shape = CircleShape,
+                                    color = if (isExpanded) OrangePrimary.copy(alpha = 0.15f) else Color.Transparent
                                 ) {
                                     Text(
-                                        text = route.formattedLength,
-                                        color = Color.White,
+                                        text = if (isExpanded) "▲" else "▼",
+                                        color = OrangePrimary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Badges: Road Points, Joint Boxes, Operational status
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFFFECE0)
-                                ) {
-                                    Text(
-                                        text = "${route.coordinates.size} Road Points",
-                                        color = OrangeDark,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                }
-
-                                if (route.jointBoxes.isNotEmpty()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = JointBoxPurple.copy(alpha = 0.15f)
+                            // CLICK MADIDMELE NAVIGATION & OPTIONS EXPAND AGUTTE
+                            androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+                                Column(modifier = Modifier.padding(top = 12.dp)) {
+                                    // Route Details line
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = OrangePrimary
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Inventory2,
-                                                contentDescription = null,
-                                                tint = JointBoxPurple,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(3.dp))
                                             Text(
-                                                text = "${route.jointBoxes.size} JC (${route.jointBoxes.sumOf { it.loopMeters }}m)",
-                                                color = JointBoxPurple,
+                                                text = route.formattedLength,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                             )
                                         }
-                                    }
-                                }
 
-                                if (cutsForThisRoute.isNotEmpty()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = CutRed.copy(alpha = 0.15f)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFFFFECE0)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ReportProblem,
-                                                contentDescription = null,
-                                                tint = CutRed,
-                                                modifier = Modifier.size(12.dp)
+                                            Text(
+                                                text = "${route.coordinates.size} Road Points",
+                                                color = OrangeDark,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                             )
+                                        }
+
+                                        if (route.jointBoxes.isNotEmpty()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = JointBoxPurple.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = "${route.jointBoxes.size} JC (${route.jointBoxes.sumOf { it.loopMeters }}m)",
+                                                    color = JointBoxPurple,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+
+                                        if (cutsForThisRoute.isNotEmpty()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = CutRed.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = "${cutsForThisRoute.size} Cut Alert",
+                                                    color = CutRed,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // NAVIGATION ROW: Google Maps Navigation & Street View
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        // Turn-by-turn Navigation Button
+                                        Button(
+                                            onClick = {
+                                                if (midPoint != null) {
+                                                    val uri = Uri.parse("google.navigation:q=${midPoint.lat},${midPoint.lng}")
+                                                    val mapIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                                        setPackage("com.google.android.apps.maps")
+                                                    }
+                                                    if (mapIntent.resolveActivity(context.packageManager) != null) {
+                                                        context.startActivity(mapIntent)
+                                                    } else {
+                                                        context.startActivity(
+                                                            Intent(Intent.ACTION_VIEW, Uri.parse(com.example.util.HaversineUtil.getGoogleMapsUrl(midPoint.lat, midPoint.lng)))
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = OrangeDark),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp)
+                                        ) {
+                                            Text("🧭 Navigate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+
+                                        // Street View Button
+                                        Button(
+                                            onClick = {
+                                                if (midPoint != null) {
+                                                    context.startActivity(
+                                                        Intent(Intent.ACTION_VIEW, Uri.parse(com.example.util.HaversineUtil.getStreetViewUrl(midPoint.lat, midPoint.lng)))
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = GoodGreen),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp)
+                                        ) {
+                                            Text("👁️ Street View", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // OPTIONS ROW: Open on Map, Report Cut, and Delete Route
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Button(
+                                            onClick = { onRouteSelected(route, true) },
+                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Map, contentDescription = null, modifier = Modifier.size(15.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "${cutsForThisRoute.size} cut${if (cutsForThisRoute.size > 1) "s" else ""}",
-                                                color = CutRed,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
+                                            Text("Full Map", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { onReportCutForRoute(route) },
+                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CutRed),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.ReportProblem, contentDescription = null, modifier = Modifier.size(15.dp), tint = CutRed)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Cut Report", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        // Delete Route Option
+                                        IconButton(
+                                            onClick = { routeToDelete = route },
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .background(CutRed.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                                                .testTag("delete_route_${route.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete Route",
+                                                tint = CutRed,
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
-                                    }
-                                } else {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = GoodGreen.copy(alpha = 0.12f)
-                                    ) {
-                                        Text(
-                                            text = "Operational",
-                                            color = GoodGreen,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Action buttons: Full Map, Cut Report, and Delete
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Button(
-                                    onClick = { onRouteSelected(route, true) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = OrangePrimary,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Map,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Full Map", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = { onReportCutForRoute(route) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CutRed),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ReportProblem,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = CutRed
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Cut Report", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                // Delete Route Option (for Admins)
-                                if (userSession?.isAdmin == true) {
-                                    IconButton(
-                                        onClick = { routeToDelete = route },
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .background(CutRed.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
-                                            .testTag("delete_route_${route.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete Route",
-                                            tint = CutRed,
-                                            modifier = Modifier.size(18.dp)
-                                        )
                                     }
                                 }
                             }

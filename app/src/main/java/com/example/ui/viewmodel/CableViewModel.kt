@@ -137,6 +137,12 @@ class CableViewModel(
     private val _currentHeading = MutableStateFlow(0.0)
     val currentHeading: StateFlow<Double> = _currentHeading.asStateFlow()
 
+    private val _currentGpsLocation = MutableStateFlow<GeoPoint?>(null)
+    val currentGpsLocation: StateFlow<GeoPoint?> = _currentGpsLocation.asStateFlow()
+
+    private val _mapRotationDegrees = MutableStateFlow(0f)
+    val mapRotationDegrees: StateFlow<Float> = _mapRotationDegrees.asStateFlow()
+
     val drawnLengthMeters: StateFlow<Long> = combine(_drawPath, _drawJointBoxes) { path, jbs ->
         val polylineLen = HaversineUtil.calculateTotalLength(path)
         val loopExtra = jbs.sumOf { it.loopMeters }
@@ -233,6 +239,26 @@ class CableViewModel(
                 _statusMessage.value = "Route delete failed"
             }
         }
+    }
+
+    fun deleteCutReport(report: CutReport) {
+        viewModelScope.launch {
+            val res = repository.deleteCutReport(report.id)
+            if (res) {
+                _statusMessage.value = "Incident on '${report.routeName}' deleted successfully"
+            } else {
+                _statusMessage.value = "Failed to delete incident"
+            }
+        }
+    }
+
+    fun rotateMap(delta: Float) {
+        val next = (_mapRotationDegrees.value + delta + 360f) % 360f
+        _mapRotationDegrees.value = next
+    }
+
+    fun resetMapRotation() {
+        _mapRotationDegrees.value = 0f
     }
 
     fun createNewAdmin(phone: String) {
@@ -337,7 +363,7 @@ class CableViewModel(
         }
     }
 
-    fun addLoopJointBox(loopMeters: Int = 20) {
+    fun addLoopJointBox(loopMeters: Int = 20, photoUrl: String = "", customName: String = "") {
         if (!_isDrawing.value) return
         val currentPath = _drawPath.value
         if (currentPath.isEmpty()) {
@@ -347,18 +373,22 @@ class CableViewModel(
 
         val lastPt = currentPath.last()
         val boxNum = _drawJointBoxes.value.size + 1
+        val finalName = if (customName.isNotBlank()) customName.trim() else "JC Box $boxNum (${loopMeters}m Loop)"
         val newBox = LoopJointBox(
             id = "jb_${UUID.randomUUID().toString().take(6)}",
             lat = lastPt.lat,
             lng = lastPt.lng,
             loopMeters = loopMeters,
-            name = "JC Box $boxNum (${loopMeters}m Loop)"
+            name = finalName,
+            photoUrl = photoUrl.trim()
         )
         _drawJointBoxes.value = _drawJointBoxes.value + newBox
-        _statusMessage.value = "Loop Joint Box ($loopMeters m Reserve) Added!"
+        val photoInfo = if (photoUrl.isNotBlank()) " with Photo" else ""
+        _statusMessage.value = "Loop Joint Box ($loopMeters m Reserve)$photoInfo Added!"
     }
 
     fun onGpsLocationUpdate(lat: Double, lng: Double, speedKmh: Float) {
+        _currentGpsLocation.value = GeoPoint(lat, lng)
         _driveSpeedKmh.value = speedKmh
         if (!_isDrawing.value || !_isAutoDriveActive.value) return
 
