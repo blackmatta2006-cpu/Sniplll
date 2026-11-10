@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,19 +19,15 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,22 +45,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.CutRed
 import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.FiberCyan
-import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.TelecomNavy
 
 @Composable
 fun LoginScreen(
+    initialPhone: String = "",
     onLoginSuccess: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var phoneInput by remember { mutableStateOf("6361788965") }
+    // Mobile number starts completely empty - user enters manually
+    var phoneInput by remember { mutableStateOf(initialPhone) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
 
@@ -77,6 +70,17 @@ fun LoginScreen(
             ElectricBlue
         )
     )
+
+    fun submitLogin() {
+        focusManager.clearFocus()
+        val cleanPhone = phoneInput.trim()
+        if (cleanPhone.length == 10 && cleanPhone.all { it.isDigit() }) {
+            errorMessage = null
+            onLoginSuccess(cleanPhone)
+        } else {
+            errorMessage = "10 digit mobile number enter madi"
+        }
+    }
 
     Box(
         modifier = modifier
@@ -93,25 +97,25 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // App Branding Icon
+            // App Logo
             Box(
                 modifier = Modifier
-                    .size(90.dp)
+                    .size(86.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.15f))
-                    .padding(8.dp),
+                    .padding(6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_cable_logo_1794211567573),
                     contentDescription = "Cable Routes Logo",
                     modifier = Modifier
-                        .size(74.dp)
+                        .size(72.dp)
                         .clip(CircleShape)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "Cable Routes",
@@ -122,47 +126,30 @@ fun LoginScreen(
                 )
             )
 
-            Text(
-                text = "Fiber Optic Surveying & Cut Management System",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = Color.White.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
-            )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Login Card
+            // Minimalist Login Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("login_card"),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(12.dp)
+                elevation = CardDefaults.cardElevation(10.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Sign In / ಲಾಗಿನ್",
+                        text = "Login",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             color = TelecomNavy
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "Enter your 10-digit mobile number to access fiber routes and map telemetry.",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFF666666),
-                            textAlign = TextAlign.Center
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     OutlinedTextField(
                         value = phoneInput,
@@ -175,7 +162,7 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("login_phone_input"),
-                        label = { Text("Mobile Number (10 Digits)") },
+                        placeholder = { Text("Enter 10-digit mobile number") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Phone,
@@ -189,19 +176,12 @@ fun LoginScreen(
                             imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(
-                            onDone = {
-                                focusManager.clearFocus()
-                                if (phoneInput.length == 10) {
-                                    onLoginSuccess(phoneInput)
-                                } else {
-                                    errorMessage = "10 digit mobile number enter madi"
-                                }
-                            }
+                            onDone = { submitLogin() }
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = TelecomNavy,
-                            unfocusedBorderColor = Color(0xFFBBBBBB)
+                            unfocusedBorderColor = Color(0xFFCCCCCC)
                         )
                     )
 
@@ -215,22 +195,15 @@ fun LoginScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            if (phoneInput.length == 10) {
-                                onLoginSuccess(phoneInput)
-                            } else {
-                                errorMessage = "10 digit mobile number enter madi"
-                            }
-                        },
+                        onClick = { submitLogin() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("login_button"),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ElectricBlue,
                             contentColor = Color.White
@@ -241,47 +214,6 @@ fun LoginScreen(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Preset Role Selectors for convenience
-                    Text(
-                        text = "Quick Demo Profiles:",
-                        style = MaterialTheme.typography.labelSmall.copy(color = Color.Gray)
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                phoneInput = "6361788965"
-                                onLoginSuccess("6361788965")
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("login_preset_admin"),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Admin (6361...)", fontSize = 11.sp, color = TelecomNavy)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                phoneInput = "9876543210"
-                                onLoginSuccess("9876543210")
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("login_preset_tech"),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Tech User", fontSize = 11.sp, color = ElectricBlue)
-                        }
                     }
                 }
             }

@@ -7,16 +7,17 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,10 +29,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.ReportProblem
@@ -51,7 +50,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -116,7 +115,7 @@ fun FullPageMapScreen(
     var isMapLoaded by remember { mutableStateOf(false) }
     var selectedMarkerInfo by remember { mutableStateOf<String?>(null) }
     var showTileSwitcher by remember { mutableStateOf(false) }
-    var activeTileType by remember { mutableStateOf("osm") } // "osm", "satellite", "topo"
+    var activeTileType by remember { mutableStateOf("streets") } // "streets", "satellite", "osmfr"
 
     val mapHtml = remember { getMapHtmlContent() }
 
@@ -194,6 +193,9 @@ fun FullPageMapScreen(
                     settings.useWideViewPort = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
+                    settings.databaseEnabled = true
+                    settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile; CableRoutes/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
                     webChromeClient = WebChromeClient()
                     webViewClient = object : WebViewClient() {
@@ -217,7 +219,7 @@ fun FullPageMapScreen(
                         "AndroidBridge"
                     )
 
-                    loadDataWithBaseURL("https://osm.org", mapHtml, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("https://server.arcgisonline.com", mapHtml, "text/html", "UTF-8", null)
                     webViewRef = this
                 }
             },
@@ -226,7 +228,7 @@ fun FullPageMapScreen(
                 .testTag("full_page_map_webview")
         )
 
-        // Top Floating Info Bar (Drawing Mode or Selected Route Stats)
+        // Top Floating Bar (Drawing Mode)
         if (isDrawingMode) {
             Surface(
                 modifier = Modifier
@@ -346,7 +348,7 @@ fun FullPageMapScreen(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 70.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = TelecomNavy,
                 shadowElevation = 8.dp
             ) {
@@ -359,9 +361,9 @@ fun FullPageMapScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     listOf(
-                        "osm" to "OpenStreetMap (Standard)",
-                        "satellite" to "Satellite / Imagery",
-                        "topo" to "Topographic / Terrain"
+                        "streets" to "Street Map (Clear)",
+                        "satellite" to "Satellite Imagery",
+                        "topo" to "Topographic Map"
                     ).forEach { (type, label) ->
                         Button(
                             onClick = {
@@ -376,9 +378,10 @@ fun FullPageMapScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(36.dp)
-                                .padding(vertical = 2.dp)
+                                .padding(vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp)
                         ) {
-                            Text(label, fontSize = 11.sp)
+                            Text(label, fontSize = 11.sp, maxLines = 1)
                         }
                     }
                 }
@@ -433,7 +436,7 @@ fun FullPageMapScreen(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(10.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -445,7 +448,9 @@ fun FullPageMapScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = TelecomNavy
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "${selectedRoute.formattedLength} • ${selectedRoute.coordinates.size} Waypoints",
@@ -458,8 +463,8 @@ fun FullPageMapScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(ElectricBlue.copy(alpha = 0.1f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .background(ElectricBlue.copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = "Active Route",
@@ -470,17 +475,17 @@ fun FullPageMapScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        // Action Buttons: Google Maps Navigation, Street View, Report Cut
+                        val midPoint = if (selectedRoute.coordinates.isNotEmpty()) {
+                            selectedRoute.coordinates[selectedRoute.coordinates.size / 2]
+                        } else GeoPoint(12.9716, 77.5946)
+
+                        // Row 1: Navigate & Street View (Clean, side-by-side, maxLines = 1)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val midPoint = if (selectedRoute.coordinates.isNotEmpty()) {
-                                selectedRoute.coordinates[selectedRoute.coordinates.size / 2]
-                            } else GeoPoint(12.9716, 77.5946)
-
                             OutlinedButton(
                                 onClick = {
                                     val uri = Uri.parse("google.navigation:q=${midPoint.lat},${midPoint.lng}")
@@ -496,7 +501,8 @@ fun FullPageMapScreen(
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Navigation,
@@ -504,8 +510,15 @@ fun FullPageMapScreen(
                                     modifier = Modifier.size(16.dp),
                                     tint = ElectricBlue
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Navigate", fontSize = 12.sp, color = ElectricBlue)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Navigate",
+                                    fontSize = 12.sp,
+                                    color = ElectricBlue,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
 
                             OutlinedButton(
@@ -515,7 +528,8 @@ fun FullPageMapScreen(
                                     )
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Streetview,
@@ -523,29 +537,46 @@ fun FullPageMapScreen(
                                     modifier = Modifier.size(16.dp),
                                     tint = GoodGreen
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Street View", fontSize = 12.sp, color = GoodGreen)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Street View",
+                                    fontSize = 12.sp,
+                                    color = GoodGreen,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
+                        }
 
-                            Button(
-                                onClick = {
-                                    onReportCutRequested(midPoint.lat, midPoint.lng)
-                                },
-                                modifier = Modifier.weight(1.2f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CutRed,
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ReportProblem,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Report Cut", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Row 2: Prominent Report Cable Cut Button (Full Width)
+                        Button(
+                            onClick = {
+                                onReportCutRequested(midPoint.lat, midPoint.lng)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CutRed,
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ReportProblem,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Report Cable Cut",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -563,14 +594,14 @@ private fun getMapHtmlContent(): String {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #e5e5e5; }
+        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #e8ebee; }
         .cut-marker {
             background-color: #ff1744;
             border: 2px solid #ffffff;
             border-radius: 50%;
             width: 18px;
             height: 18px;
-            box-shadow: 0 0 10px rgba(255, 23, 68, 0.8);
+            box-shadow: 0 0 10px rgba(255, 23, 68, 0.9);
             animation: pulse 1.5s infinite;
         }
         @keyframes pulse {
@@ -583,9 +614,10 @@ private fun getMapHtmlContent(): String {
             color: #ffffff;
             font-weight: bold;
             font-size: 10px;
-            padding: 2px 6px;
+            padding: 3px 7px;
             border-radius: 12px;
             border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             white-space: nowrap;
         }
         .end-pin {
@@ -593,9 +625,10 @@ private fun getMapHtmlContent(): String {
             color: #ffffff;
             font-weight: bold;
             font-size: 10px;
-            padding: 2px 6px;
+            padding: 3px 7px;
             border-radius: 12px;
             border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             white-space: nowrap;
         }
     </style>
@@ -607,20 +640,25 @@ private fun getMapHtmlContent(): String {
         var map = L.map('map', { zoomControl: false }).setView([12.9716, 77.5946], 13);
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
-        var tileOsm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Esri World Street Map: 100% Free, NO API Key needed, no watermarks, high detail
+        var tileStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
-            attribution: '© OSM'
+            attribution: '© Esri, HERE, Garmin, USGS'
         }).addTo(map);
 
+        // Esri World Imagery (Satellite)
         var tileSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
+            maxZoom: 19,
+            attribution: '© Esri, Maxar'
         });
 
-        var tileTopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 17
+        // Esri World Topo Map
+        var tileTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: '© Esri, USGS'
         });
 
-        var currentTileLayer = tileOsm;
+        var currentTileLayer = tileStreets;
 
         function switchTileLayer(type) {
             map.removeLayer(currentTileLayer);
@@ -629,7 +667,7 @@ private fun getMapHtmlContent(): String {
             } else if (type === 'topo') {
                 currentTileLayer = tileTopo;
             } else {
-                currentTileLayer = tileOsm;
+                currentTileLayer = tileStreets;
             }
             map.addLayer(currentTileLayer);
         }
@@ -672,8 +710,8 @@ private fun getMapHtmlContent(): String {
             var startIcon = L.divIcon({
                 className: '',
                 html: '<div class="start-pin">START</div>',
-                iconSize: [40, 20],
-                iconAnchor: [20, 10]
+                iconSize: [44, 22],
+                iconAnchor: [22, 11]
             });
             startMarker = L.marker(latlngs[0], { icon: startIcon }).addTo(map);
 
@@ -681,8 +719,8 @@ private fun getMapHtmlContent(): String {
                 var endIcon = L.divIcon({
                     className: '',
                     html: '<div class="end-pin">END</div>',
-                    iconSize: [35, 20],
-                    iconAnchor: [17, 10]
+                    iconSize: [40, 22],
+                    iconAnchor: [20, 11]
                 });
                 endMarker = L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map);
             }

@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,6 +75,9 @@ class MainActivity : ComponentActivity() {
 fun CableRoutesApp(
     viewModel: CableViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val sharedPrefs = remember { context.getSharedPreferences("cable_routes_prefs", Context.MODE_PRIVATE) }
+
     val userSession by viewModel.userSession.collectAsStateWithLifecycle()
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -91,6 +96,7 @@ fun CableRoutesApp(
     val snackbarHostState = remember { SnackbarHostState() }
     var showDrawNameDialog by remember { mutableStateOf(false) }
 
+    // Restore saved login session on initial composition
     LaunchedEffect(statusMessage) {
         statusMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -110,7 +116,9 @@ fun CableRoutesApp(
 
     if (userSession == null) {
         LoginScreen(
+            initialPhone = "",
             onLoginSuccess = { phone ->
+                sharedPrefs.edit().putString("saved_phone", phone).apply()
                 viewModel.login(phone)
             }
         )
@@ -130,7 +138,10 @@ fun CableRoutesApp(
                     onToggleSearch = { viewModel.setSearchExpanded(!isSearchExpanded) },
                     isLoading = isLoading,
                     onRefresh = { viewModel.refresh() },
-                    onLogout = { viewModel.logout() },
+                    onLogout = {
+                        sharedPrefs.edit().remove("saved_phone").apply()
+                        viewModel.logout()
+                    },
                     showFilters = currentTab == AppTab.ROUTES
                 )
             },
