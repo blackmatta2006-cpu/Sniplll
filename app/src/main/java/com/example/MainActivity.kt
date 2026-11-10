@@ -1,11 +1,16 @@
 package com.example
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Map
@@ -30,6 +36,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,41 +49,48 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.AdminDrawDialog
 import com.example.ui.components.AppHeaderWithSearch
+import com.example.ui.screens.AdminPanelScreen
 import com.example.ui.screens.CutAssistantScreen
 import com.example.ui.screens.CutHistoryScreen
 import com.example.ui.screens.FullPageMapScreen
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.RoutesListScreen
-import com.example.ui.theme.CableRoutesTheme
 import com.example.ui.theme.CutRed
-import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.FiberCyan
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeAmber
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangePrimary
+import com.example.ui.theme.ShreyNetworkTheme
 import com.example.ui.viewmodel.AppTab
 import com.example.ui.viewmodel.CableViewModel
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CableRoutesTheme {
-                CableRoutesApp()
+            ShreyNetworkTheme {
+                ShreyNetworkApp()
             }
         }
     }
 }
 
 @Composable
-fun CableRoutesApp(
+fun ShreyNetworkApp(
     viewModel: CableViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val sharedPrefs = remember { context.getSharedPreferences("cable_routes_prefs", Context.MODE_PRIVATE) }
+    val sharedPrefs = remember { context.getSharedPreferences("shrey_network_prefs", Context.MODE_PRIVATE) }
 
     val userSession by viewModel.userSession.collectAsStateWithLifecycle()
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
@@ -86,9 +100,14 @@ fun CableRoutesApp(
     val filteredRoutes by viewModel.filteredRoutes.collectAsStateWithLifecycle()
     val selectedRoute by viewModel.selectedRoute.collectAsStateWithLifecycle()
     val cutReports by viewModel.cutReports.collectAsStateWithLifecycle()
+    val adminPhones by viewModel.adminPhones.collectAsStateWithLifecycle()
     val isDrawing by viewModel.isDrawing.collectAsStateWithLifecycle()
     val drawPath by viewModel.drawPath.collectAsStateWithLifecycle()
+    val drawJointBoxes by viewModel.drawJointBoxes.collectAsStateWithLifecycle()
     val drawnLengthMeters by viewModel.drawnLengthMeters.collectAsStateWithLifecycle()
+    val isSnapToRoad by viewModel.isSnapToRoadEnabled.collectAsStateWithLifecycle()
+    val isAutoDrive by viewModel.isAutoDriveActive.collectAsStateWithLifecycle()
+    val driveSpeedKmh by viewModel.driveSpeedKmh.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
@@ -96,7 +115,58 @@ fun CableRoutesApp(
     val snackbarHostState = remember { SnackbarHostState() }
     var showDrawNameDialog by remember { mutableStateOf(false) }
 
-    // Restore saved login session on initial composition
+    // Request Location permission for driving auto-survey
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Handle result
+    }
+
+    LaunchedEffect(isAutoDrive) {
+        if (isAutoDrive) {
+            val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!hasFine) {
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            }
+        }
+    }
+
+    // GPS location listener for driving auto-survey
+    DisposableEffect(isAutoDrive) {
+        if (!isAutoDrive) return@DisposableEffect onDispose {}
+
+        val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
+            .setMinUpdateIntervalMillis(1000)
+            .setMinUpdateDistanceMeters(10f)
+            .build()
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val loc = result.lastLocation ?: return
+                val speedKmh = (loc.speed * 3.6f) // m/s to km/h
+                viewModel.onGpsLocationUpdate(loc.latitude, loc.longitude, speedKmh)
+            }
+        }
+
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            }
+        } catch (_: SecurityException) {}
+
+        onDispose {
+            try {
+                fusedClient.removeLocationUpdates(locationCallback)
+            } catch (_: Exception) {}
+        }
+    }
+
     LaunchedEffect(statusMessage) {
         statusMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -116,7 +186,7 @@ fun CableRoutesApp(
 
     if (userSession == null) {
         LoginScreen(
-            initialPhone = "",
+            initialPhone = "", // Empty field for manual entry
             onLoginSuccess = { phone ->
                 sharedPrefs.edit().putString("saved_phone", phone).apply()
                 viewModel.login(phone)
@@ -127,7 +197,6 @@ fun CableRoutesApp(
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
-                // Header with integrated search bar
                 AppHeaderWithSearch(
                     userSession = userSession,
                     searchQuery = searchQuery,
@@ -162,16 +231,16 @@ fun CableRoutesApp(
                         },
                         label = { Text("Routes", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TelecomNavy,
-                            selectedTextColor = TelecomNavy,
-                            indicatorColor = FiberCyan.copy(alpha = 0.35f),
+                            selectedIconColor = OrangeDark,
+                            selectedTextColor = OrangeDark,
+                            indicatorColor = OrangePrimary.copy(alpha = 0.2f),
                             unselectedIconColor = Color.Gray,
                             unselectedTextColor = Color.Gray
                         ),
                         modifier = Modifier.testTag("tab_routes")
                     )
 
-                    // Full Map Tab ("Maps ella different pagealli full page irbeku")
+                    // Full Map Tab
                     NavigationBarItem(
                         selected = currentTab == AppTab.FULL_MAP,
                         onClick = { viewModel.setTab(AppTab.FULL_MAP) },
@@ -180,9 +249,9 @@ fun CableRoutesApp(
                         },
                         label = { Text("Full Map", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = ElectricBlue,
-                            selectedTextColor = ElectricBlue,
-                            indicatorColor = ElectricBlue.copy(alpha = 0.2f),
+                            selectedIconColor = OrangePrimary,
+                            selectedTextColor = OrangePrimary,
+                            indicatorColor = OrangePrimary.copy(alpha = 0.2f),
                             unselectedIconColor = Color.Gray,
                             unselectedTextColor = Color.Gray
                         ),
@@ -198,16 +267,16 @@ fun CableRoutesApp(
                         },
                         label = { Text("Cut Report", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TelecomNavy,
-                            selectedTextColor = TelecomNavy,
-                            indicatorColor = FiberCyan.copy(alpha = 0.35f),
+                            selectedIconColor = OrangeDark,
+                            selectedTextColor = OrangeDark,
+                            indicatorColor = OrangePrimary.copy(alpha = 0.2f),
                             unselectedIconColor = Color.Gray,
                             unselectedTextColor = Color.Gray
                         ),
                         modifier = Modifier.testTag("tab_cut_assistant")
                     )
 
-                    // Cut History Incidents Tab
+                    // Incidents Tab
                     NavigationBarItem(
                         selected = currentTab == AppTab.CUT_HISTORY,
                         onClick = { viewModel.setTab(AppTab.CUT_HISTORY) },
@@ -225,7 +294,7 @@ fun CableRoutesApp(
                                     }
                                 }
                             ) {
-                                Icon(imageVector = Icons.Default.History, contentDescription = "Cut History")
+                                Icon(imageVector = Icons.Default.History, contentDescription = "Incidents")
                             }
                         },
                         label = { Text("Incidents", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
@@ -238,6 +307,26 @@ fun CableRoutesApp(
                         ),
                         modifier = Modifier.testTag("tab_cut_history")
                     )
+
+                    // Admin Panel Tab (Visible to Admins)
+                    if (userSession?.isAdmin == true) {
+                        NavigationBarItem(
+                            selected = currentTab == AppTab.ADMIN,
+                            onClick = { viewModel.setTab(AppTab.ADMIN) },
+                            icon = {
+                                Icon(imageVector = Icons.Default.AdminPanelSettings, contentDescription = "Admins")
+                            },
+                            label = { Text("Admins", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = OrangeDark,
+                                selectedTextColor = OrangeDark,
+                                indicatorColor = OrangeAmber.copy(alpha = 0.25f),
+                                unselectedIconColor = Color.Gray,
+                                unselectedTextColor = Color.Gray
+                            ),
+                            modifier = Modifier.testTag("tab_admin")
+                        )
+                    }
                 }
             }
         ) { innerPadding ->
@@ -262,6 +351,9 @@ fun CableRoutesApp(
                                 onRouteSelected = { route, openMap ->
                                     viewModel.selectRoute(route, navigateToMap = openMap)
                                 },
+                                onDeleteRoute = { route ->
+                                    viewModel.deleteRoute(route)
+                                },
                                 onStartDrawRoute = { showDrawNameDialog = true },
                                 onReportCutForRoute = { route ->
                                     viewModel.selectRoute(route)
@@ -272,15 +364,22 @@ fun CableRoutesApp(
                         }
 
                         AppTab.FULL_MAP -> {
-                            // "Maps ella different pagealli full page irbeku"
                             FullPageMapScreen(
                                 selectedRoute = selectedRoute,
                                 cutReports = cutReports,
                                 userSession = userSession,
                                 isDrawingMode = isDrawing,
                                 drawPath = drawPath,
+                                drawJointBoxes = drawJointBoxes,
                                 drawnLengthMeters = drawnLengthMeters,
+                                isSnapToRoad = isSnapToRoad,
+                                isAutoDrive = isAutoDrive,
+                                driveSpeedKmh = driveSpeedKmh,
                                 onAddDrawPoint = { pt -> viewModel.addPointToDraw(pt) },
+                                onMoveDirection = { dir -> viewModel.moveInDirection(dir) },
+                                onAddLoopJointBox = { loopMeters -> viewModel.addLoopJointBox(loopMeters) },
+                                onToggleSnapToRoad = { viewModel.toggleSnapToRoad() },
+                                onToggleAutoDrive = { viewModel.toggleAutoDrive() },
                                 onUndoDrawPoint = { viewModel.undoLastDrawPoint() },
                                 onSaveDrawnRoute = { viewModel.saveDrawnRoute() },
                                 onCancelDrawing = { viewModel.cancelDrawing() },
@@ -305,7 +404,6 @@ fun CableRoutesApp(
                             CutHistoryScreen(
                                 cutReports = cutReports,
                                 onViewOnMapClick = { report ->
-                                    // Focus on route and map
                                     val r = filteredRoutes.find { it.id == report.routeId }
                                     if (r != null) viewModel.selectRoute(r)
                                     viewModel.setTab(AppTab.FULL_MAP)
@@ -314,19 +412,9 @@ fun CableRoutesApp(
                         }
 
                         AppTab.ADMIN -> {
-                            // If direct survey tab activated
-                            FullPageMapScreen(
-                                selectedRoute = selectedRoute,
-                                cutReports = cutReports,
-                                userSession = userSession,
-                                isDrawingMode = true,
-                                drawPath = drawPath,
-                                drawnLengthMeters = drawnLengthMeters,
-                                onAddDrawPoint = { pt -> viewModel.addPointToDraw(pt) },
-                                onUndoDrawPoint = { viewModel.undoLastDrawPoint() },
-                                onSaveDrawnRoute = { viewModel.saveDrawnRoute() },
-                                onCancelDrawing = { viewModel.cancelDrawing() },
-                                onReportCutRequested = { _, _ -> }
+                            AdminPanelScreen(
+                                adminPhones = adminPhones,
+                                onCreateAdmin = { phone -> viewModel.createNewAdmin(phone) }
                             )
                         }
                     }

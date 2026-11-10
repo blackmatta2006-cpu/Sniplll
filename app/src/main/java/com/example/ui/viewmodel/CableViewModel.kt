@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.CableRoute
 import com.example.data.model.CutReport
+import com.example.data.model.DrawDirection
 import com.example.data.model.GeoPoint
+import com.example.data.model.LoopJointBox
 import com.example.data.model.UserRole
 import com.example.data.model.UserSession
 import com.example.data.repository.CableRepository
 import com.example.util.HaversineUtil
+import com.example.util.RoadRouter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,8 +25,8 @@ enum class AppTab(val title: String) {
     ROUTES("Routes"),
     FULL_MAP("Full Map"),
     CUT_ASSISTANT("Cut Report"),
-    CUT_HISTORY("Cut History"),
-    ADMIN("Admin Survey")
+    CUT_HISTORY("Incidents"),
+    ADMIN("Admins")
 }
 
 enum class RouteFilter(val label: String) {
@@ -49,7 +52,7 @@ class CableViewModel(
 ) : ViewModel() {
 
     companion object {
-        const val ADMIN_PHONE = "6361788965"
+        const val PRIMARY_ADMIN = "6361788965"
     }
 
     // Auth & Session
@@ -70,12 +73,13 @@ class CableViewModel(
     private val _isSearchExpanded = MutableStateFlow(false)
     val isSearchExpanded: StateFlow<Boolean> = _isSearchExpanded.asStateFlow()
 
-    // Selected Route for Inspection & Cut Reporting
+    // Selected Route
     private val _selectedRoute = MutableStateFlow<CableRoute?>(null)
     val selectedRoute: StateFlow<CableRoute?> = _selectedRoute.asStateFlow()
 
-    // Cut Reports
+    // Cut Reports & Admins
     val cutReports: StateFlow<List<CutReport>> = repository.cutReports
+    val adminPhones: StateFlow<List<String>> = repository.adminPhones
     val isLoading: StateFlow<Boolean> = repository.isLoading
     val errorMessage: StateFlow<String?> = repository.errorMessage
 
@@ -99,8 +103,8 @@ class CableViewModel(
 
         when (filter) {
             RouteFilter.ALL -> queryMatched
-            RouteFilter.UNDER_1KM -> queryMatched.filter { it.lengthMeters < 1000 }
-            RouteFilter.OVER_1KM -> queryMatched.filter { it.lengthMeters >= 1000 }
+            RouteFilter.UNDER_1KM -> queryMatched.filter { it.totalCableLengthMeters < 1000 }
+            RouteFilter.OVER_1KM -> queryMatched.filter { it.totalCableLengthMeters >= 1000 }
             RouteFilter.HAS_CUTS -> {
                 val routeIdsWithCuts = reports.map { it.routeId }.toSet()
                 queryMatched.filter { routeIdsWithCuts.contains(it.id) }
@@ -115,11 +119,28 @@ class CableViewModel(
     private val _drawPath = MutableStateFlow<List<GeoPoint>>(emptyList())
     val drawPath: StateFlow<List<GeoPoint>> = _drawPath.asStateFlow()
 
+    private val _drawJointBoxes = MutableStateFlow<List<LoopJointBox>>(emptyList())
+    val drawJointBoxes: StateFlow<List<LoopJointBox>> = _drawJointBoxes.asStateFlow()
+
     private val _newRouteName = MutableStateFlow("")
     val newRouteName: StateFlow<String> = _newRouteName.asStateFlow()
 
-    val drawnLengthMeters: StateFlow<Long> = _drawPath.combine(_isDrawing) { path, _ ->
-        HaversineUtil.calculateTotalLength(path)
+    private val _isSnapToRoadEnabled = MutableStateFlow(true)
+    val isSnapToRoadEnabled: StateFlow<Boolean> = _isSnapToRoadEnabled.asStateFlow()
+
+    private val _isAutoDriveActive = MutableStateFlow(false)
+    val isAutoDriveActive: StateFlow<Boolean> = _isAutoDriveActive.asStateFlow()
+
+    private val _driveSpeedKmh = MutableStateFlow(0f)
+    val driveSpeedKmh: StateFlow<Float> = _driveSpeedKmh.asStateFlow()
+
+    private val _currentHeading = MutableStateFlow(0.0)
+    val currentHeading: StateFlow<Double> = _currentHeading.asStateFlow()
+
+    val drawnLengthMeters: StateFlow<Long> = combine(_drawPath, _drawJointBoxes) { path, jbs ->
+        val polylineLen = HaversineUtil.calculateTotalLength(path)
+        val loopExtra = jbs.sumOf { it.loopMeters }
+        polylineLen + loopExtra
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     // Chat Assistant State
@@ -127,7 +148,7 @@ class CableViewModel(
         listOf(
             ChatMessage(
                 sender = "bot",
-                text = "Namaskara! Route select madi. Cable cut calculation mattu Google Maps navigation ge ready idini."
+                text = "Namaskara! Shrey Network ಗೆ ಸ್ವಾಗತ. ಕೇಬಲ್ ರೂಟ್ ಆಯ್ಕೆ ಮಾಡಿ ಅಥವಾ 'estakke cut agide cable' ಎಂದು ಕೇಳಿ."
             )
         )
     )
@@ -144,10 +165,11 @@ class CableViewModel(
     fun login(phoneInput: String): Boolean {
         val clean = phoneInput.trim()
         if (!clean.matches(Regex("^\\d{10}$"))) {
-            _statusMessage.value = "Dayavittu 10 digit mobile number enter madi"
+            _statusMessage.value = "10 digit mobile number enter madi"
             return false
         }
-        val role = if (clean == ADMIN_PHONE) UserRole.ADMIN else UserRole.TECHNICIAN
+        val isAdminUser = clean == PRIMARY_ADMIN || adminPhones.value.contains(clean)
+        val role = if (isAdminUser) UserRole.ADMIN else UserRole.TECHNICIAN
         _userSession.value = UserSession(phone = clean, role = role)
         refresh()
         return true
@@ -178,6 +200,19 @@ class CableViewModel(
         }
     }
 
+    fun toggleSnapToRoad() {
+        _isSnapToRoadEnabled.value = !_isSnapToRoadEnabled.value
+    }
+
+    fun toggleAutoDrive() {
+        _isAutoDriveActive.value = !_isAutoDriveActive.value
+        if (_isAutoDriveActive.value) {
+            _statusMessage.value = "Auto-Drive ON: Driving live cable tracking started"
+        } else {
+            _statusMessage.value = "Auto-Drive Paused"
+        }
+    }
+
     fun selectRoute(route: CableRoute, navigateToMap: Boolean = false) {
         _selectedRoute.value = route
         addBotMessage("Route '${route.name}' (${route.formattedLength}) select aagide. Full Map nodi athava Cut Report tab ge hogi.")
@@ -186,10 +221,39 @@ class CableViewModel(
         }
     }
 
+    fun deleteRoute(route: CableRoute) {
+        viewModelScope.launch {
+            val success = repository.deleteRoute(route.id)
+            if (success) {
+                if (_selectedRoute.value?.id == route.id) {
+                    _selectedRoute.value = null
+                }
+                _statusMessage.value = "Route '${route.name}' deleted successfully"
+            } else {
+                _statusMessage.value = "Route delete failed"
+            }
+        }
+    }
+
+    fun createNewAdmin(phone: String) {
+        val clean = phone.trim()
+        if (clean.length != 10 || !clean.all { it.isDigit() }) {
+            _statusMessage.value = "10 digit mobile number enter madi"
+            return
+        }
+        viewModelScope.launch {
+            val res = repository.addAdmin(clean)
+            if (res) {
+                _statusMessage.value = "New Admin $clean added successfully!"
+            } else {
+                _statusMessage.value = "Admin already exists or failed to save"
+            }
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch {
             repository.refreshData()
-            // Auto select first route if none selected
             if (_selectedRoute.value == null && repository.routes.value.isNotEmpty()) {
                 _selectedRoute.value = repository.routes.value.first()
             }
@@ -208,49 +272,160 @@ class CableViewModel(
         }
         _newRouteName.value = name
         _drawPath.value = emptyList()
+        _drawJointBoxes.value = emptyList()
         _isDrawing.value = true
+        _isAutoDriveActive.value = false
         _currentTab.value = AppTab.FULL_MAP
-        _statusMessage.value = "Drawing mode ON. Map meledhe points tap madi."
+        _statusMessage.value = "Step 1: ರಸ್ತೆಯ ಮೇಲೆ Starting Point ಸೆಲೆಕ್ಟ್ ಮಾಡಿ"
     }
 
     fun addPointToDraw(point: GeoPoint) {
         if (!_isDrawing.value) return
-        _drawPath.value = _drawPath.value + point
+
+        val currentPath = _drawPath.value
+        if (currentPath.isEmpty()) {
+            // First starting point
+            _drawPath.value = listOf(point)
+            _statusMessage.value = "Starting point set! Direction (⬆️ ➡️ ⬅️ ⬇️) ಅಥವಾ ಮ್ಯಾಪ್ ಮೇಲೆ ಟ್ಯಾಪ್ ಮಾಡಿ."
+            return
+        }
+
+        val lastPt = currentPath.last()
+        _currentHeading.value = RoadRouter.calculateBearing(lastPt, point)
+
+        if (_isSnapToRoadEnabled.value) {
+            viewModelScope.launch {
+                val roadSnapped = RoadRouter.getRoadPath(lastPt, point)
+                // Filter out first if it matches last
+                val toAppend = if (roadSnapped.size > 1) roadSnapped.drop(1) else listOf(point)
+                _drawPath.value = _drawPath.value + toAppend
+            }
+        } else {
+            _drawPath.value = _drawPath.value + point
+        }
+    }
+
+    fun moveInDirection(direction: DrawDirection) {
+        if (!_isDrawing.value) return
+        val currentPath = _drawPath.value
+        if (currentPath.isEmpty()) {
+            _statusMessage.value = "ಮೊದಲು ಮ್ಯಾಪ್ ಮೇಲೆ Starting Point ಟ್ಯಾಪ್ ಮಾಡಿ!"
+            return
+        }
+
+        val lastPoint = currentPath.last()
+        val baseBearing = if (currentPath.size >= 2) {
+            RoadRouter.calculateBearing(currentPath[currentPath.size - 2], lastPoint)
+        } else {
+            _currentHeading.value
+        }
+
+        val targetBearing = (baseBearing + direction.bearingDelta + 360.0) % 360.0
+        _currentHeading.value = targetBearing
+
+        // Project 50m in that direction along road
+        val projected = RoadRouter.projectPoint(lastPoint, 50.0, targetBearing)
+
+        viewModelScope.launch {
+            if (_isSnapToRoadEnabled.value) {
+                val roadSegment = RoadRouter.getRoadPath(lastPoint, projected)
+                val toAppend = if (roadSegment.size > 1) roadSegment.drop(1) else listOf(projected)
+                _drawPath.value = _drawPath.value + toAppend
+            } else {
+                _drawPath.value = _drawPath.value + projected
+            }
+        }
+    }
+
+    fun addLoopJointBox(loopMeters: Int = 20) {
+        if (!_isDrawing.value) return
+        val currentPath = _drawPath.value
+        if (currentPath.isEmpty()) {
+            _statusMessage.value = "Starting point ಇಲ್ಲದೆ Joint Box ಸೇರಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ"
+            return
+        }
+
+        val lastPt = currentPath.last()
+        val boxNum = _drawJointBoxes.value.size + 1
+        val newBox = LoopJointBox(
+            id = "jb_${UUID.randomUUID().toString().take(6)}",
+            lat = lastPt.lat,
+            lng = lastPt.lng,
+            loopMeters = loopMeters,
+            name = "JC Box $boxNum (${loopMeters}m Loop)"
+        )
+        _drawJointBoxes.value = _drawJointBoxes.value + newBox
+        _statusMessage.value = "Loop Joint Box ($loopMeters m Reserve) Added!"
+    }
+
+    fun onGpsLocationUpdate(lat: Double, lng: Double, speedKmh: Float) {
+        _driveSpeedKmh.value = speedKmh
+        if (!_isDrawing.value || !_isAutoDriveActive.value) return
+
+        val newPoint = GeoPoint(lat, lng)
+        val currentPath = _drawPath.value
+        if (currentPath.isEmpty()) {
+            _drawPath.value = listOf(newPoint)
+            return
+        }
+
+        val lastPoint = currentPath.last()
+        val dist = HaversineUtil.distance(lastPoint, newPoint)
+        // Add point if vehicle moved at least 15 meters
+        if (dist >= 15.0) {
+            viewModelScope.launch {
+                val roadSegment = if (_isSnapToRoadEnabled.value) {
+                    RoadRouter.getRoadPath(lastPoint, newPoint)
+                } else {
+                    listOf(lastPoint, newPoint)
+                }
+                val toAppend = if (roadSegment.size > 1) roadSegment.drop(1) else listOf(newPoint)
+                _drawPath.value = _drawPath.value + toAppend
+            }
+        }
     }
 
     fun undoLastDrawPoint() {
-        if (_drawPath.value.isNotEmpty()) {
+        if (_drawPath.value.size > 1) {
             _drawPath.value = _drawPath.value.dropLast(1)
+        } else if (_drawPath.value.size == 1) {
+            _drawPath.value = emptyList()
+            _statusMessage.value = "Starting point cleared"
         }
     }
 
     fun cancelDrawing() {
         _isDrawing.value = false
+        _isAutoDriveActive.value = false
         _drawPath.value = emptyList()
+        _drawJointBoxes.value = emptyList()
         _newRouteName.value = ""
     }
 
     fun saveDrawnRoute() {
         val name = _newRouteName.value.trim()
         val path = _drawPath.value
-        val phone = _userSession.value?.phone ?: ADMIN_PHONE
+        val jointBoxes = _drawJointBoxes.value
+        val phone = _userSession.value?.phone ?: PRIMARY_ADMIN
 
         if (name.isBlank()) {
             _statusMessage.value = "Route name required"
             return
         }
         if (path.size < 2) {
-            _statusMessage.value = "At least 2 points required"
+            _statusMessage.value = "At least 2 road points required"
             return
         }
 
         viewModelScope.launch {
-            val saved = repository.addRoute(name, path, phone)
+            val saved = repository.addRoute(name, path, phone, jointBoxes)
             _selectedRoute.value = saved
             _isDrawing.value = false
+            _isAutoDriveActive.value = false
             _drawPath.value = emptyList()
+            _drawJointBoxes.value = emptyList()
             _newRouteName.value = ""
-            _statusMessage.value = "Route '$name' saved successfully!"
+            _statusMessage.value = "Route '$name' saved with ${jointBoxes.size} Joint Boxes!"
             _currentTab.value = AppTab.ROUTES
         }
     }
@@ -298,14 +473,13 @@ class CableViewModel(
             return
         }
 
-        // Default to midpoint if no specific distance given
         val midIndex = current.coordinates.size / 2
         val mid = current.coordinates[midIndex]
         recordAndAnnounceCut(current, mid.lat, mid.lng, "Cut reported near midpoint (${current.lengthMeters / 2}m)")
     }
 
     private fun recordAndAnnounceCut(route: CableRoute, lat: Double, lng: Double, notes: String) {
-        val phone = _userSession.value?.phone ?: "6361788965"
+        val phone = _userSession.value?.phone ?: PRIMARY_ADMIN
         val mapsUrl = HaversineUtil.getGoogleMapsUrl(lat, lng)
         val svUrl = HaversineUtil.getStreetViewUrl(lat, lng)
 

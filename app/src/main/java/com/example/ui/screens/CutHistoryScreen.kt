@@ -45,9 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CutReport
 import com.example.ui.theme.CutRed
-import com.example.ui.theme.ElectricBlue
 import com.example.ui.theme.GoodGreen
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangePrimary
 
 @Composable
 fun CutHistoryScreen(
@@ -61,6 +61,7 @@ fun CutHistoryScreen(
         Column(
             modifier = modifier
                 .fillMaxSize()
+                .background(Color(0xFFFFF9F5))
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -83,7 +84,7 @@ fun CutHistoryScreen(
                 text = "No Active Cable Cuts",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = TelecomNavy
+                    color = Color(0xFF2C2420)
                 )
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -98,6 +99,7 @@ fun CutHistoryScreen(
         LazyColumn(
             modifier = modifier
                 .fillMaxSize()
+                .background(Color(0xFFFFF9F5))
                 .testTag("cut_history_list"),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -112,7 +114,7 @@ fun CutHistoryScreen(
                         text = "Reported Cable Incidents (${cutReports.size})",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = TelecomNavy
+                            color = OrangeDark
                         )
                     )
                     Surface(
@@ -137,7 +139,8 @@ fun CutHistoryScreen(
                         .testTag("cut_report_card_${report.id}"),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(2.dp)
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFE0CC))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -165,7 +168,7 @@ fun CutHistoryScreen(
                                         text = report.routeName,
                                         style = MaterialTheme.typography.titleMedium.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = TelecomNavy
+                                            color = Color(0xFF2C2420)
                                         )
                                     )
                                     Text(
@@ -194,7 +197,7 @@ fun CutHistoryScreen(
                         // GPS Coordinates
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFF5F5F5),
+                            color = Color(0xFFFFF3E0),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
@@ -230,7 +233,7 @@ fun CutHistoryScreen(
                                 },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
+                                colors = ButtonDefaults.buttonColors(containerColor = OrangeDark),
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                             ) {
                                 Icon(
@@ -270,12 +273,13 @@ fun CutHistoryScreen(
                                         )
                                     },
                                     shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = OrangeDark)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Call,
                                         contentDescription = "Call technician",
-                                        tint = TelecomNavy,
+                                        tint = OrangeDark,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }

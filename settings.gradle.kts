@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Cable Routes"
+rootProject.name = "Shrey Network"
 
 include(":app")

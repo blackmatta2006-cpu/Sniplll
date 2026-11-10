@@ -3,6 +3,7 @@ package com.example.data.repository
 import com.example.data.model.CableRoute
 import com.example.data.model.CutReport
 import com.example.data.model.GeoPoint
+import com.example.data.model.LoopJointBox
 import com.example.data.remote.FirestoreRemoteDataSource
 import com.example.util.HaversineUtil
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,9 @@ class CableRepository(
     private val _cutReports = MutableStateFlow<List<CutReport>>(emptyList())
     val cutReports: StateFlow<List<CutReport>> = _cutReports.asStateFlow()
 
+    private val _adminPhones = MutableStateFlow<List<String>>(listOf("6361788965"))
+    val adminPhones: StateFlow<List<String>> = _adminPhones.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -34,6 +38,7 @@ class CableRepository(
 
         val routesResult = remoteDataSource.fetchRoutes()
         val reportsResult = remoteDataSource.fetchCutReports()
+        val adminsResult = remoteDataSource.fetchAdmins()
 
         var success = false
 
@@ -42,11 +47,10 @@ class CableRepository(
                 _routes.value = fetchedRoutes
                 success = true
             } else if (_routes.value.isEmpty()) {
-                // Seed fallback route if empty
                 _routes.value = getDefaultSampleRoutes()
             }
         }.onFailure { err ->
-            _errorMessage.value = "Firestore sync error: ${err.localizedMessage}"
+            _errorMessage.value = "Firestore sync: ${err.localizedMessage}"
             if (_routes.value.isEmpty()) {
                 _routes.value = getDefaultSampleRoutes()
             }
@@ -54,15 +58,22 @@ class CableRepository(
 
         reportsResult.onSuccess { fetchedReports ->
             _cutReports.value = fetchedReports
-        }.onFailure {
-            // Keep existing reports
+        }
+
+        adminsResult.onSuccess { admins ->
+            _adminPhones.value = admins
         }
 
         _isLoading.value = false
         return success
     }
 
-    suspend fun addRoute(name: String, coordinates: List<GeoPoint>, phone: String): CableRoute {
+    suspend fun addRoute(
+        name: String,
+        coordinates: List<GeoPoint>,
+        phone: String,
+        jointBoxes: List<LoopJointBox> = emptyList()
+    ): CableRoute {
         val length = HaversineUtil.calculateTotalLength(coordinates)
         val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
         val tempId = UUID.randomUUID().toString().take(12)
@@ -73,22 +84,36 @@ class CableRepository(
             coordinates = coordinates,
             lengthMeters = length,
             createdBy = phone,
-            createdAt = nowIso
+            createdAt = nowIso,
+            jointBoxes = jointBoxes
         )
 
-        // Add to local state immediately
         _routes.value = listOf(newRoute) + _routes.value
 
-        // Try pushing to Firestore
         val remoteResult = remoteDataSource.saveRoute(newRoute)
         remoteResult.onSuccess { remoteId ->
-            // Update with confirmed remote ID
             _routes.value = _routes.value.map {
                 if (it.id == tempId) it.copy(id = remoteId) else it
             }
         }
 
         return newRoute
+    }
+
+    suspend fun deleteRoute(routeId: String): Boolean {
+        _routes.value = _routes.value.filter { it.id != routeId }
+        val res = remoteDataSource.deleteRoute(routeId)
+        return res.isSuccess
+    }
+
+    suspend fun addAdmin(phone: String): Boolean {
+        val clean = phone.trim()
+        if (clean.length != 10 || !clean.all { it.isDigit() }) return false
+        if (!_adminPhones.value.contains(clean)) {
+            _adminPhones.value = _adminPhones.value + clean
+            remoteDataSource.saveAdmin(clean)
+        }
+        return true
     }
 
     suspend fun addCutReport(
@@ -148,7 +173,10 @@ class CableRepository(
                 ),
                 lengthMeters = 1096,
                 createdBy = "6361788965",
-                createdAt = "2026-11-09T06:59:08.490Z"
+                createdAt = "2026-11-09T06:59:08.490Z",
+                jointBoxes = listOf(
+                    LoopJointBox("jb_sample_1", 13.01086, 77.58070, 30, "JC Box 1 (30m Loop)")
+                )
             )
         )
     }

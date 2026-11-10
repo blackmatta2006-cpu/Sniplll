@@ -62,9 +62,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.CableRoute
 import com.example.ui.theme.CutRed
 import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.FiberCyan
 import com.example.ui.theme.GoodGreen
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeAmber
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangePrimary
 import com.example.ui.viewmodel.ChatMessage
 
 @Composable
@@ -80,7 +81,6 @@ fun CutAssistantScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom on new message
     LaunchedEffect(chatMessages.size) {
         if (chatMessages.isNotEmpty()) {
             listState.animateScrollToItem(chatMessages.size - 1)
@@ -90,13 +90,14 @@ fun CutAssistantScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F6F9))
+            .background(Color(0xFFFFF9F5))
     ) {
         // Active Route Banner
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White,
-            shadowElevation = 2.dp
+            shadowElevation = 2.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary.copy(alpha = 0.2f))
         ) {
             Row(
                 modifier = Modifier
@@ -115,16 +116,17 @@ fun CutAssistantScreen(
                             text = "${selectedRoute.name} (${selectedRoute.formattedLength})",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = TelecomNavy
+                                color = OrangeDark
                             )
                         )
                     }
                     OutlinedButton(
                         onClick = onSelectRouteClick,
                         shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OrangePrimary)
                     ) {
-                        Text("Change", fontSize = 11.sp, color = TelecomNavy)
+                        Text("Change", fontSize = 11.sp)
                     }
                 } else {
                     Text(
@@ -133,7 +135,7 @@ fun CutAssistantScreen(
                     )
                     Button(
                         onClick = onSelectRouteClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -164,13 +166,13 @@ fun CutAssistantScreen(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .background(TelecomNavy, CircleShape),
+                                .background(OrangePrimary, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Assistant,
                                 contentDescription = null,
-                                tint = FiberCyan,
+                                tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -185,9 +187,10 @@ fun CutAssistantScreen(
                             bottomEnd = if (isUser) 4.dp else 16.dp
                         ),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isUser) ElectricBlue else Color.White
+                            containerColor = if (isUser) OrangePrimary else Color.White
                         ),
                         elevation = CardDefaults.cardElevation(2.dp),
+                        border = if (!isUser) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFE0CC)) else null,
                         modifier = Modifier
                             .fillMaxWidth(if (msg.mapsUrl != null) 0.9f else 0.8f)
                             .testTag(if (isUser) "user_message_bubble" else "bot_message_bubble")
@@ -201,7 +204,6 @@ fun CutAssistantScreen(
                                 )
                             )
 
-                            // If bot message has Google Maps & Street View links:
                             if (msg.mapsUrl != null && msg.lat != null && msg.lng != null) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
@@ -225,9 +227,7 @@ fun CutAssistantScreen(
                                         },
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = ElectricBlue
-                                        ),
+                                        colors = ButtonDefaults.buttonColors(containerColor = OrangeDark),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                     ) {
                                         Icon(
@@ -249,9 +249,7 @@ fun CutAssistantScreen(
                                         },
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = GoodGreen
-                                        ),
+                                        colors = ButtonDefaults.buttonColors(containerColor = GoodGreen),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                     ) {
                                         Icon(
@@ -271,23 +269,23 @@ fun CutAssistantScreen(
                                             type = "text/plain"
                                             putExtra(
                                                 Intent.EXTRA_TEXT,
-                                                "Cable Cut Location Alert!\nRoute: ${selectedRoute?.name ?: "Cable"}\nLat/Lng: ${msg.lat}, ${msg.lng}\nMaps: ${msg.mapsUrl}"
+                                                "Shrey Network Cable Cut Alert!\nRoute: ${selectedRoute?.name ?: "Cable"}\nLat/Lng: ${msg.lat}, ${msg.lng}\nMaps: ${msg.mapsUrl}"
                                             )
                                         }
                                         context.startActivity(Intent.createChooser(shareIntent, "Share Cut Location"))
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = OrangeDark)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Share,
                                         contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = TelecomNavy
+                                        modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Share Cut Location Coordinates", fontSize = 11.sp, color = TelecomNavy)
+                                    Text("Share Cut Coordinates", fontSize = 11.sp)
                                 }
                             }
                         }
@@ -296,7 +294,7 @@ fun CutAssistantScreen(
             }
         }
 
-        // Quick Suggestion Chips (Kannada phrases and distance shortcuts)
+        // Quick Suggestion Chips
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White,
@@ -314,8 +312,8 @@ fun CutAssistantScreen(
                         onClick = { onSendMessage("estakke cut agide cable") },
                         label = { Text("estakke cut agide cable", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                         colors = AssistChipDefaults.assistChipColors(
-                            containerColor = Color(0xFFE8EAF6),
-                            labelColor = TelecomNavy
+                            containerColor = Color(0xFFFFF3E0),
+                            labelColor = OrangeDark
                         )
                     )
 
@@ -367,8 +365,8 @@ fun CutAssistantScreen(
                         shape = RoundedCornerShape(24.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TelecomNavy,
-                            unfocusedBorderColor = Color(0xFFCCCCCC)
+                            focusedBorderColor = OrangePrimary,
+                            unfocusedBorderColor = Color(0xFFDDDDDD)
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
@@ -390,7 +388,7 @@ fun CutAssistantScreen(
                         },
                         modifier = Modifier
                             .size(48.dp)
-                            .background(TelecomNavy, CircleShape)
+                            .background(OrangePrimary, CircleShape)
                             .testTag("chat_send_button")
                     ) {
                         Icon(

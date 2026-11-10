@@ -1,12 +1,9 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -25,8 +22,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangePrimary
 
 @Composable
 fun AdminDrawDialog(
@@ -43,17 +40,17 @@ fun AdminDrawDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "New Fiber Cable Survey",
+                text = "Shrey Network Cable Survey",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = TelecomNavy
+                    color = OrangeDark
                 )
             )
         },
         text = {
             Column {
                 Text(
-                    text = "Enter a name for the new cable route. You will then tap waypoints on the Full Page Map to survey the polyline.",
+                    text = "Enter a name for the new fiber route. On the map, select your starting point on the road, then use big direction controls (Straight, Right, Left, Back) or drive with auto-tracking.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -64,7 +61,7 @@ fun AdminDrawDialog(
                         routeName = it
                         error = null
                     },
-                    label = { Text("Route Name (e.g. MG Road Backbone)") },
+                    label = { Text("Route Name (e.g. Ring Road Feeder)") },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -90,10 +87,10 @@ fun AdminDrawDialog(
                         onConfirm(routeName.trim())
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                 modifier = Modifier.testTag("admin_start_drawing_confirm")
             ) {
-                Text("Start Drawing on Map", fontWeight = FontWeight.Bold)
+                Text("Start Road Survey", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

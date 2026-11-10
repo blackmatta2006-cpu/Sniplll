@@ -1,6 +1,6 @@
 {
-  "name": "Cable Routes",
-  "description": "Fiber optic cable route surveying, mapping, inspection, and cut reporting tool with full-page map and Firestore sync.",
+  "name": "Shrey Network",
+  "description": "Fiber optic cable surveying, road-snapped route drawing, loop joint box management, driving auto-survey, and cut report tracker.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

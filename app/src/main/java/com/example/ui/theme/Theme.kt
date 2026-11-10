@@ -8,49 +8,49 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = FiberCyan,
-    onPrimary = TelecomNavy,
-    primaryContainer = TelecomBlue,
+    primary = OrangePrimary,
+    onPrimary = Color.White,
+    primaryContainer = OrangeDark,
     onPrimaryContainer = Color.White,
-    secondary = ElectricBlue,
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFF1E3A8A),
-    onSecondaryContainer = Color(0xFFBFDBFE),
-    tertiary = CutRed,
-    onTertiary = Color.White,
-    background = SurfaceDark,
+    secondary = OrangeAmber,
+    onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF4E2600),
+    onSecondaryContainer = Color(0xFFFFD180),
+    tertiary = NetworkCyan,
+    onTertiary = Color.Black,
+    background = DarkBackground,
     onBackground = TextPrimaryDark,
-    surface = CardDark,
+    surface = SurfaceCardDark,
     onSurface = TextPrimaryDark,
-    surfaceVariant = Color(0xFF263238),
+    surfaceVariant = Color(0xFF2C2420),
     onSurfaceVariant = TextSecondaryDark,
     error = CutRed,
     onError = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = TelecomNavy,
+    primary = OrangePrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0E7FF),
-    onPrimaryContainer = TelecomNavy,
-    secondary = ElectricBlue,
+    primaryContainer = OrangeContainerLight,
+    onPrimaryContainer = OrangeDark,
+    secondary = OrangeDark,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFDBEAFE),
-    onSecondaryContainer = Color(0xFF1E40AF),
-    tertiary = CutRedDark,
+    secondaryContainer = Color(0xFFFFECB3),
+    onSecondaryContainer = Color(0xFF5D4037),
+    tertiary = ElectricBlue,
     onTertiary = Color.White,
-    background = SurfaceLight,
+    background = WarmBackgroundLight,
     onBackground = TextPrimaryLight,
-    surface = CardLight,
+    surface = SurfaceCardLight,
     onSurface = TextPrimaryLight,
-    surfaceVariant = Color(0xFFEEF2F6),
+    surfaceVariant = Color(0xFFFFF0E6),
     onSurfaceVariant = TextSecondaryLight,
     error = CutRedDark,
     onError = Color.White
 )
 
 @Composable
-fun CableRoutesTheme(
+fun ShreyNetworkTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {

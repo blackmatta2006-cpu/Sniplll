@@ -49,8 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.CutRed
-import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeAmber
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangePrimary
 
 @Composable
 fun LoginScreen(
@@ -65,9 +66,9 @@ fun LoginScreen(
 
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
-            TelecomNavy,
-            Color(0xFF283593),
-            ElectricBlue
+            OrangeDark,
+            OrangePrimary,
+            OrangeAmber
         )
     )
 
@@ -100,56 +101,73 @@ fun LoginScreen(
             // App Logo
             Box(
                 modifier = Modifier
-                    .size(86.dp)
+                    .size(92.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
-                    .padding(6.dp),
+                    .background(Color.White.copy(alpha = 0.25f))
+                    .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_cable_logo_1794211567573),
-                    contentDescription = "Cable Routes Logo",
+                    contentDescription = "Shrey Network Logo",
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(76.dp)
                         .clip(CircleShape)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Cable Routes",
+                text = "Shrey Network",
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
                     letterSpacing = 1.sp
                 )
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Fiber Optic Surveying & Management",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = FontWeight.Medium
+                )
+            )
 
-            // Minimalist Login Card
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Minimalist Orange-Accented Login Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("login_card"),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(10.dp)
+                elevation = CardDefaults.cardElevation(12.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Login",
+                        text = "Sign In / ಲಾಗಿನ್",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = TelecomNavy
+                            color = OrangeDark
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Enter mobile number to view routes & map",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFF6B5C52)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     OutlinedTextField(
                         value = phoneInput,
@@ -162,12 +180,12 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("login_phone_input"),
-                        placeholder = { Text("Enter 10-digit mobile number") },
+                        placeholder = { Text("10-digit mobile number") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Phone,
                                 contentDescription = null,
-                                tint = TelecomNavy
+                                tint = OrangePrimary
                             )
                         },
                         singleLine = true,
@@ -178,10 +196,11 @@ fun LoginScreen(
                         keyboardActions = KeyboardActions(
                             onDone = { submitLogin() }
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TelecomNavy,
-                            unfocusedBorderColor = Color(0xFFCCCCCC)
+                            focusedBorderColor = OrangePrimary,
+                            unfocusedBorderColor = Color(0xFFFFD59E),
+                            cursorColor = OrangePrimary
                         )
                     )
 
@@ -195,23 +214,23 @@ fun LoginScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
                         onClick = { submitLogin() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(50.dp)
                             .testTag("login_button"),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ElectricBlue,
+                            containerColor = OrangePrimary,
                             contentColor = Color.White
                         )
                     ) {
                         Text(
                             text = "Login",
-                            fontSize = 16.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }

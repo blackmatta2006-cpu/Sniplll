@@ -24,10 +24,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -41,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -49,10 +49,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserSession
-import com.example.ui.theme.ElectricBlue
-import com.example.ui.theme.FiberCyan
 import com.example.ui.theme.GoodGreen
-import com.example.ui.theme.TelecomNavy
+import com.example.ui.theme.OrangeAmber
+import com.example.ui.theme.OrangeDark
+import com.example.ui.theme.OrangeFlame
+import com.example.ui.theme.OrangePrimary
 import com.example.ui.viewmodel.RouteFilter
 
 @Composable
@@ -72,14 +73,23 @@ fun AppHeaderWithSearch(
 ) {
     val focusManager = LocalFocusManager.current
 
+    val headerGradient = Brush.horizontalGradient(
+        colors = listOf(
+            Color(0xFFE65100),
+            Color(0xFFFF6D00),
+            Color(0xFFFF8F00)
+        )
+    )
+
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = TelecomNavy,
+        color = OrangePrimary,
         shadowElevation = 6.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(headerGradient)
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
@@ -95,21 +105,21 @@ fun AppHeaderWithSearch(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(FiberCyan.copy(alpha = 0.2f), CircleShape),
+                            .size(38.dp)
+                            .background(Color.White.copy(alpha = 0.22f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = "App Icon",
-                            tint = FiberCyan,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = "Shrey Network Icon",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Cable Routes",
+                            text = "Shrey Network",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -122,15 +132,16 @@ fun AppHeaderWithSearch(
                                     modifier = Modifier
                                         .size(7.dp)
                                         .background(
-                                            if (userSession.isAdmin) GoodGreen else ElectricBlue,
+                                            if (userSession.isAdmin) Color(0xFF76FF03) else Color.White,
                                             CircleShape
                                         )
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = if (userSession.isAdmin) "Admin (${userSession.phone})" else "Tech (${userSession.phone})",
+                                    text = if (userSession.isAdmin) "Admin (${userSession.phone})" else "Technician (${userSession.phone})",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = Color.White.copy(alpha = 0.8f)
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        fontWeight = FontWeight.Medium
                                     )
                                 )
                             }
@@ -162,13 +173,13 @@ fun AppHeaderWithSearch(
                         if (isLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                color = FiberCyan,
+                                color = Color.White,
                                 strokeWidth = 2.dp
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "Sync Database",
+                                contentDescription = "Sync",
                                 tint = Color.White
                             )
                         }
@@ -184,14 +195,14 @@ fun AppHeaderWithSearch(
                             Icon(
                                 imageVector = Icons.Default.ExitToApp,
                                 contentDescription = "Logout",
-                                tint = Color(0xFFFF8A80)
+                                tint = Color.White
                             )
                         }
                     }
                 }
             }
 
-            // Search Bar (Always visible or smooth expandable within header)
+            // Search Bar in Header
             AnimatedVisibility(
                 visible = isSearchExpanded,
                 enter = fadeIn(),
@@ -207,7 +218,7 @@ fun AppHeaderWithSearch(
                         placeholder = {
                             Text(
                                 "Search route name, ID, or creator...",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = Color.White.copy(alpha = 0.7f),
                                 fontSize = 14.sp
                             )
                         },
@@ -215,7 +226,7 @@ fun AppHeaderWithSearch(
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = FiberCyan
+                                tint = Color.White
                             )
                         },
                         trailingIcon = {
@@ -224,7 +235,7 @@ fun AppHeaderWithSearch(
                                     Icon(
                                         imageVector = Icons.Default.Close,
                                         contentDescription = "Clear search",
-                                        tint = Color.White.copy(alpha = 0.7f)
+                                        tint = Color.White
                                     )
                                 }
                             }
@@ -234,11 +245,11 @@ fun AppHeaderWithSearch(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color.White.copy(alpha = 0.12f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            focusedBorderColor = FiberCyan,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-                            cursorColor = FiberCyan
+                            focusedContainerColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.15f),
+                            focusedBorderColor = Color.White,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
+                            cursorColor = Color.White
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
@@ -268,16 +279,16 @@ fun AppHeaderWithSearch(
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = FiberCyan,
-                                selectedLabelColor = TelecomNavy,
-                                containerColor = Color.White.copy(alpha = 0.12f),
+                                selectedContainerColor = Color.White,
+                                selectedLabelColor = OrangeDark,
+                                containerColor = Color.White.copy(alpha = 0.18f),
                                 labelColor = Color.White
                             ),
                             border = FilterChipDefaults.filterChipBorder(
                                 enabled = true,
                                 selected = isSelected,
-                                borderColor = if (isSelected) FiberCyan else Color.White.copy(alpha = 0.25f),
-                                selectedBorderColor = FiberCyan
+                                borderColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.35f),
+                                selectedBorderColor = Color.White
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.testTag("filter_${filter.name}")
